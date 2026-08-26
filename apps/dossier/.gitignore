@@ -1,0 +1,73 @@
+# Logs and debug files
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Dependencies (matches node_modules at any depth, incl. server/node_modules)
+node_modules/
+
+# Build outputs
+dist/
+dist-ssr/
+build/
+/.next/
+out/
+server/dist/
+
+# Environment variables - protect secrets
+# (matches .env and server/.env at any depth)
+.env
+.env.local
+.env.*.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# Allow committing example/template files (without real secrets)
+!.env.example
+!server/.env.example
+
+# OS-specific files
+.DS_Store
+Thumbs.db
+ehthumbs.db
+desktop.ini
+
+# Editor and IDE files
+.vscode/*
+!.vscode/extensions.json
+.idea/
+.zed/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# Temporary and backup files
+*.tmp
+*.bak
+*.swp
+*~
+
+# Linter / test cache
+.eslintcache
+coverage/
+*.tsbuildinfo
+
+# Deployment platform folders
+.vercel
+.netlify
+.wrangler/
+
+# Supabase local CLI temporary files (only cache/logs, not migrations)
+.supabase/
+
+# Web3 / wallet temporary files (if any appear locally)
+walletconnect.json
+*.keystore
+
+# Windows Explorer/search artifacts
+*.lnk
