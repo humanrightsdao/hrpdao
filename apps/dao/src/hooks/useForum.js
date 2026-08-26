@@ -23,7 +23,15 @@ import { useNostrIdentity } from "./useNostrIdentity";
 // threads/replies published before this fix won't have the tag —
 // ForumAuthor.jsx falls back to the previous pubkey-code display for
 // those.
-const FORUM_TAG = "hrp-forum";
+//
+// RESET (2026-08-26): tag bumped from "hrp-forum" to "hrpdao-forum"
+// to deliberately start the forum clean — old test threads (Тема 5,
+// Тема 4, Test forum, Chronicle, Policy test, ...) were published
+// under the old tag to the same public relays, and Nostr relays don't
+// reliably support deletion, so a fresh tag is the practical way to
+// stop querying them. They still physically exist on the relays under
+// "hrp-forum" — this only changes what THIS app queries/publishes.
+const FORUM_TAG = "hrpdao-forum";
 
 function parseThread(ev) {
   const subjectTag = ev.tags.find((t) => t[0] === "subject");
