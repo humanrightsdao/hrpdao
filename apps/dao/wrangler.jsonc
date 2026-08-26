@@ -1,0 +1,18 @@
+{
+  "name": "dao",
+  "compatibility_date": "2026-07-01",
+  "main": "worker/index.js",
+  "assets": {
+    "directory": "./dist",
+    "not_found_handling": "single-page-application",
+    "binding": "ASSETS",
+    // Without this, Cloudflare checks ./dist for a matching static file
+    // FIRST, and since /api/chat/stream doesn't exist as a file, its
+    // "not_found_handling": "single-page-application" fallback serves
+    // index.html directly — the request never reaches worker/index.js at
+    // all. run_worker_first sends every request through the Worker's
+    // fetch() first; the Worker itself calls env.ASSETS.fetch(request)
+    // for anything that isn't /api/*. Same setting dossier already uses.
+    "run_worker_first": true
+  }
+}

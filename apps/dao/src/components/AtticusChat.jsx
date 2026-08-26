@@ -3,9 +3,12 @@ import { useTranslation } from "react-i18next";
 import { X, Send, Sparkles, AlertCircle } from "lucide-react";
 import atticusIcon from "../assets/atticus.png";
 
-// Real backend at apps/ai (Express + Gemini, server/index.js) —
-// streams the response over SSE: /api/chat/stream.
-const API_BASE = import.meta.env.VITE_ATTICUS_API_URL || "http://localhost:3001";
+// Atticus backend now lives INSIDE this app's own Cloudflare Worker
+// (worker/index.js), same pattern as dossier — so this is a same-origin,
+// relative call ("" + "/api/chat/stream") and needs no separate host.
+// VITE_ATTICUS_API_URL is kept as an optional override only, for local
+// dev against a different backend if you ever need it; leave it unset.
+const API_BASE = import.meta.env.VITE_ATTICUS_API_URL || "";
 
 export default function AtticusChat({ open, onClose }) {
   const { t } = useTranslation();
@@ -50,7 +53,7 @@ export default function AtticusChat({ open, onClose }) {
     if (!text || streaming) return;
 
     const userMsg = { role: "user", text };
-    // History for the backend — server/index.js only takes the last 4
+    // History for the backend — worker/index.js only takes the last 4
     // and expects the key "content", not "text".
     const history = messages
       .filter((m) => m !== WELCOME_MESSAGE)
@@ -127,9 +130,7 @@ export default function AtticusChat({ open, onClose }) {
       }
     } catch (e) {
       if (e.name !== "AbortError") {
-        setError(
-          t("dao.atticus.connectionError", { port: API_BASE.split(":").pop() }),
-        );
+        setError(t("dao.atticus.connectionError"));
         // Remove the empty bubble that was left with no text.
         setMessages((m) => (m[m.length - 1]?.text === "" ? m.slice(0, -1) : m));
       }
