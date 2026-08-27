@@ -959,10 +959,8 @@
       "disconnect": "Вийти",
       "for": "За",
       "against": "Проти",
-      "abstain": "Утримався"
-    },
-    "footer": {
-      "tagline": "публічний реєстр управління"
+      "abstain": "Утримався",
+      "viewOnDossier": "Переглянути на Dossier"
     },
     "atticus": {
       "triggerTitle": "Аттікус — AI-радник з прав людини",
@@ -990,7 +988,9 @@
       "retry": "Спробувати знову",
       "doneTitle": "Готово",
       "doneBody": "Ви пройшли вступ про права людини. Тепер можете переглядати пропозиції, а щойно отримаєте SHIELD або COUNCIL — голосувати й подавати власні.",
-      "toRegistry": "До реєстру"
+      "toRegistry": "До реєстру",
+      "finishing": "Підтвердження…",
+      "finishError": "Не вдалося підтвердити завершення. Спробуйте ще раз."
     },
     "card": {
       "brandName": "Human Rights Policy",
@@ -1022,12 +1022,11 @@
       "downloadPng": "Завантажити PNG"
     },
     "home": {
-      "sessionOpen": "on-chain · сесія відкрита",
       "title": "Human Rights Policy DAO",
-      "subtitle": "Децентралізоване управління захистом прав людини. Пропозиції, голосування та скарбниця — напряму з блокчейну, без посередників.",
+      "subtitle": "Децентралізоване управління захистом прав людини.",
       "viewProposals": "Переглянути пропозиції",
       "submitProposal": "Подати пропозицію",
-      "activeCases": "Активні справи",
+      "activeCases": "Активні голосування",
       "quorum": "Кворум",
       "yourInfluence": "Ваш Influence"
     },
@@ -1456,6 +1455,30 @@
       "bodyPlaceholder": "Розкажіть більше…",
       "posting": "Публікація…",
       "post": "Опублікувати"
+    },
+    "violationsMap": {
+      "title": "Мапа порушень",
+      "scopeBadge": "усі країни · dossier",
+      "level": "Рівень {{level}}",
+      "openFullMap": "Відкрити повну мапу на Dossier",
+      "loadingMap": "Завантаження мапи...",
+      "hexagonSelected": "Обрано гексагон (рівень {{level}})",
+      "reset": "Скинути",
+      "violationsOnMap": "{{count}} порушень на мапі",
+      "popupDate": "Дата",
+      "popupCountry": "Країна",
+      "violationsInArea": "Порушень у цій зоні: {{count}}",
+      "felony": "Тяжкий злочин",
+      "misdemeanor": "Проступок",
+      "infraction": "Дрібне порушення",
+      "unspecified": "Не вказано"
+    },
+    "communityFeed": {
+      "title": "Стрічка спільноти",
+      "scopeBadge": "планета Земля · dossier",
+      "noPostsYet": "Поки що немає публікацій",
+      "loadMore": "Завантажити ще",
+      "noText": "(без тексту)"
     }
   },
   "affected_persons": "Постраждалі особи",
@@ -1506,5 +1529,8 @@
   "submit_first_complaint": "Подати першу скаргу",
   "test_notification_comment_message": "Це тестове сповіщення. У реальній системі вас було б перенаправлено до коментаря.",
   "test_notification_post_message": "Це тестове сповіщення. У реальній системі вас було б перенаправлено до допису.",
-  "country_detection_hint": "Країна визначається автоматично за вашою локацією"
+  "country_detection_hint": "Країна визначається автоматично за вашою локацією",
+  "captcha_verifying": "Перевірка…",
+  "captcha_error": "Не вдалося перевірити CAPTCHA. Спробуйте оновити сторінку.",
+  "please_complete_captcha": "Будь ласка, пройдіть перевірку CAPTCHA"
 }

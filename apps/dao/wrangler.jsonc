@@ -1,18 +1,39 @@
 {
-  "name": "dao",
-  "compatibility_date": "2026-07-01",
-  "main": "worker/index.js",
-  "assets": {
-    "directory": "./dist",
-    "not_found_handling": "single-page-application",
-    "binding": "ASSETS",
-    // Without this, Cloudflare checks ./dist for a matching static file
-    // FIRST, and since /api/chat/stream doesn't exist as a file, its
-    // "not_found_handling": "single-page-application" fallback serves
-    // index.html directly — the request never reaches worker/index.js at
-    // all. run_worker_first sends every request through the Worker's
-    // fetch() first; the Worker itself calls env.ASSETS.fetch(request)
-    // for anything that isn't /api/*. Same setting dossier already uses.
-    "run_worker_first": true
-  }
+	"name": "dao",
+	"compatibility_date": "2026-07-01",
+	"main": "worker/index.js",
+	"assets": {
+		"directory": "./dist",
+		"not_found_handling": "single-page-application",
+		"binding": "ASSETS",
+		// Without this, Cloudflare checks ./dist for a matching static file
+		// FIRST, and since /api/chat/stream doesn't exist as a file, its
+		// "not_found_handling": "single-page-application" fallback serves
+		// index.html directly — the request never reaches worker/index.js at
+		// all. run_worker_first sends every request through the Worker's
+		// fetch() first; the Worker itself calls env.ASSETS.fetch(request)
+		// for anything that isn't /api/*. Same setting dossier already uses.
+		"run_worker_first": true
+	},
+	// Backs /api/onboarding/complete and /api/onboarding/status
+	// (worker/index.js) — durable, per-wallet storage for "has this
+	// address completed the onboarding lessons/tests", replacing the
+	// old client-only `dao_onboarded_<address>` localStorage flag.
+	//
+	// SETUP (one-time):
+	//   1. npx wrangler kv namespace create ONBOARDING_KV
+	//      → prints an "id" — paste it below as "id".
+	//   2. npx wrangler kv namespace create ONBOARDING_KV --preview
+	//      → prints a separate "preview_id" for `wrangler dev` — paste
+	//      it below as "preview_id". (Without this, local dev writes go
+	//      to a throwaway local-only store, which is fine too, but
+	//      `wrangler dev` will warn if "preview_id" is missing.)
+	"kv_namespaces": [
+
+		{
+			"binding": "ONBOARDING_KV",
+			"id": "a45f79e1e24e465893e2ffa832f85433",
+			"preview_id": "f20d0121279f4f609a65513fa8861906"
+		}
+	]
 }

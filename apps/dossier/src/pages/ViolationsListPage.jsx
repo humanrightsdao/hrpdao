@@ -639,17 +639,8 @@ const ViolationsListPage = () => {
                       {t("no_my_violations") ||
                         "You haven't submitted any violations yet"}
                     </p>
-                    <p className="text-[14px] text-slate-500 dark:text-white/40 mb-4">
-                      {t("submit_first_violation_description") ||
-                        "Submit your first violation to help protect human rights"}
-                    </p>
-                    <button
-                      onClick={() => navigate("/violations")}
-                      className="inline-flex items-center gap-1.5 px-4 py-2 text-[14px] bg-[#8B1A2A] border border-[#8B1A2A]/25 text-white/95 hover:bg-[#9B2232] dark:bg-[#2B000A] dark:border-[#b41e3c]/30 dark:text-[#e8a0b0]/70 dark:hover:bg-[#3d0012] rounded-lg transition-colors"
-                    >
-                      <Plus className="w-3.5 h-3.5" />
-                      {t("submit_first_violation") || "Submit First Violation"}
-                    </button>
+
+
                   </>
                 ) : (
                   <>
@@ -662,13 +653,7 @@ const ViolationsListPage = () => {
                       {t("be_first_to_submit") ||
                         "Be the first to submit a violation"}
                     </p>
-                    <button
-                      onClick={() => navigate("/violations")}
-                      className="inline-flex items-center gap-1.5 px-4 py-2 text-[14px] bg-[#8B1A2A] border border-[#8B1A2A]/25 text-white/95 hover:bg-[#9B2232] dark:bg-[#2B000A] dark:border-[#b41e3c]/30 dark:text-[#e8a0b0]/70 dark:hover:bg-[#3d0012] rounded-lg transition-colors"
-                    >
-                      <Plus className="w-3.5 h-3.5" />
-                      {t("submit_first_violation") || "Submit First Violation"}
-                    </button>
+
                   </>
                 )}
               </div>

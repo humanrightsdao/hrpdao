@@ -36,11 +36,6 @@ export default function HomePage() {
         />
 
         <div className="relative">
-          <div className="inline-flex items-center gap-2 font-mono text-[12px] tracking-widest text-verdigrisBright uppercase bg-verdigris/10 border border-verdigris/25 rounded-full px-3 py-1 mb-6">
-            <span className="w-1.5 h-1.5 rounded-full bg-verdigris animate-pulse" />
-            {t("dao.home.sessionOpen")}
-          </div>
-
           <h1 className="font-display font-semibold text-4xl sm:text-6xl leading-[1.05] text-parchment max-w-3xl">
             {t("dao.home.title")}
           </h1>

@@ -1003,10 +1003,8 @@
       "disconnect": "Déconnecter",
       "for": "Pour",
       "against": "Contre",
-      "abstain": "Abstention"
-    },
-    "footer": {
-      "tagline": "registre public de gouvernance"
+      "abstain": "Abstention",
+      "viewOnDossier": "Voir sur Dossier"
     },
     "atticus": {
       "triggerTitle": "Atticus — conseiller IA en droits humains",
@@ -1034,7 +1032,9 @@
       "retry": "Réessayer",
       "doneTitle": "Terminé",
       "doneBody": "Vous avez terminé l'introduction aux droits humains. Vous pouvez maintenant consulter les propositions, et dès que vous recevrez SHIELD ou COUNCIL — voter et en soumettre.",
-      "toRegistry": "Vers le registre"
+      "toRegistry": "Vers le registre",
+      "finishing": "Confirmation…",
+      "finishError": "Échec de la confirmation. Veuillez réessayer."
     },
     "card": {
       "brandName": "Human Rights Policy",
@@ -1066,12 +1066,11 @@
       "downloadPng": "Télécharger le PNG"
     },
     "home": {
-      "sessionOpen": "on-chain · session ouverte",
       "title": "Human Rights Policy DAO",
-      "subtitle": "Gouvernance décentralisée pour la protection des droits humains. Propositions, votes et trésorerie — directement depuis la blockchain, sans intermédiaire.",
+      "subtitle": "Gouvernance décentralisée pour la protection des droits humains.",
       "viewProposals": "Voir les propositions",
       "submitProposal": "Soumettre une proposition",
-      "activeCases": "Dossiers actifs",
+      "activeCases": "Votes actifs",
       "quorum": "Quorum",
       "yourInfluence": "Votre Influence"
     },
@@ -1464,11 +1463,38 @@
       "bodyPlaceholder": "Dites-nous en plus…",
       "posting": "Publication…",
       "post": "Publier"
+    },
+    "violationsMap": {
+      "title": "Carte des violations",
+      "scopeBadge": "tous pays · dossier",
+      "level": "Niveau {{level}}",
+      "openFullMap": "Ouvrir la carte complète sur Dossier",
+      "loadingMap": "Chargement de la carte...",
+      "hexagonSelected": "Hexagone sélectionné (niveau {{level}})",
+      "reset": "Réinitialiser",
+      "violationsOnMap": "{{count}} violations sur la carte",
+      "popupDate": "Date",
+      "popupCountry": "Pays",
+      "violationsInArea": "Violations dans la zone : {{count}}",
+      "felony": "Crime",
+      "misdemeanor": "Délit",
+      "infraction": "Infraction",
+      "unspecified": "Non précisé"
+    },
+    "communityFeed": {
+      "title": "Fil de la communauté",
+      "scopeBadge": "planète Terre · dossier",
+      "noPostsYet": "Aucune publication pour l'instant",
+      "loadMore": "Charger plus",
+      "noText": "(sans texte)"
     }
   },
   "filtered_by_hexagon": "Filtré par hexagone",
   "global_view": "Vue globale",
   "reset": "Réinitialiser",
   "your_location": "votre position",
-  "country_detection_hint": "Le pays est détecté automatiquement en fonction de votre position"
+  "country_detection_hint": "Le pays est détecté automatiquement en fonction de votre position",
+  "captcha_verifying": "Vérification...",
+  "captcha_error": "Échec de la vérification du CAPTCHA. Veuillez actualiser la page.",
+  "please_complete_captcha": "Veuillez compléter la vérification CAPTCHA"
 }

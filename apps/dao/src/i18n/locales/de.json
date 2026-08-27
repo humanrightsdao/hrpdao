@@ -1003,10 +1003,8 @@
       "disconnect": "Trennen",
       "for": "Dafür",
       "against": "Dagegen",
-      "abstain": "Enthaltung"
-    },
-    "footer": {
-      "tagline": "öffentliches Verwaltungsregister"
+      "abstain": "Enthaltung",
+      "viewOnDossier": "Auf Dossier ansehen"
     },
     "atticus": {
       "triggerTitle": "Atticus — KI-Menschenrechtsberater",
@@ -1034,7 +1032,9 @@
       "retry": "Erneut versuchen",
       "doneTitle": "Fertig",
       "doneBody": "Sie haben die Einführung zu Menschenrechten abgeschlossen. Sie können jetzt Vorschläge durchsuchen, und sobald Sie SHIELD oder COUNCIL erhalten — abstimmen und eigene einreichen.",
-      "toRegistry": "Zum Register"
+      "toRegistry": "Zum Register",
+      "finishing": "Bestätigung…",
+      "finishError": "Bestätigung fehlgeschlagen. Bitte erneut versuchen."
     },
     "card": {
       "brandName": "Human Rights Policy",
@@ -1066,12 +1066,11 @@
       "downloadPng": "PNG herunterladen"
     },
     "home": {
-      "sessionOpen": "on-chain · Sitzung aktiv",
       "title": "Human Rights Policy DAO",
-      "subtitle": "Dezentrale Governance für den Schutz der Menschenrechte. Anträge, Abstimmungen und Treasury — direkt von der Blockchain, ohne Vermittler.",
+      "subtitle": "Dezentrale Governance für den Schutz der Menschenrechte.",
       "viewProposals": "Anträge ansehen",
       "submitProposal": "Antrag einreichen",
-      "activeCases": "Aktive Fälle",
+      "activeCases": "Aktive Abstimmungen",
       "quorum": "Quorum",
       "yourInfluence": "Ihre Influence"
     },
@@ -1464,11 +1463,38 @@
       "bodyPlaceholder": "Erzählen Sie mehr…",
       "posting": "Wird veröffentlicht…",
       "post": "Veröffentlichen"
+    },
+    "violationsMap": {
+      "title": "Verstoßkarte",
+      "scopeBadge": "alle Länder · dossier",
+      "level": "Stufe {{level}}",
+      "openFullMap": "Vollständige Karte auf Dossier öffnen",
+      "loadingMap": "Karte wird geladen...",
+      "hexagonSelected": "Hexagon ausgewählt (Stufe {{level}})",
+      "reset": "Zurücksetzen",
+      "violationsOnMap": "{{count}} Verstöße auf der Karte",
+      "popupDate": "Datum",
+      "popupCountry": "Land",
+      "violationsInArea": "Verstöße im Bereich: {{count}}",
+      "felony": "Verbrechen",
+      "misdemeanor": "Vergehen",
+      "infraction": "Ordnungswidrigkeit",
+      "unspecified": "Nicht angegeben"
+    },
+    "communityFeed": {
+      "title": "Community-Feed",
+      "scopeBadge": "Planet Erde · dossier",
+      "noPostsYet": "Noch keine Beiträge",
+      "loadMore": "Mehr laden",
+      "noText": "(kein Text)"
     }
   },
   "filtered_by_hexagon": "Nach Hexagon gefiltert",
   "global_view": "Globale Ansicht",
   "reset": "Zurücksetzen",
   "your_location": "dein Standort",
-  "country_detection_hint": "Das Land wird automatisch anhand deines Standorts erkannt"
+  "country_detection_hint": "Das Land wird automatisch anhand deines Standorts erkannt",
+  "captcha_verifying": "Überprüfung...",
+  "captcha_error": "CAPTCHA-Überprüfung fehlgeschlagen. Bitte Seite aktualisieren.",
+  "please_complete_captcha": "Bitte schließen Sie die CAPTCHA-Überprüfung ab"
 }

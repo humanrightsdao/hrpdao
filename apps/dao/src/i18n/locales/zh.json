@@ -1003,10 +1003,8 @@
       "disconnect": "断开连接",
       "for": "赞成",
       "against": "反对",
-      "abstain": "弃权"
-    },
-    "footer": {
-      "tagline": "公共治理登记册"
+      "abstain": "弃权",
+      "viewOnDossier": "在 Dossier 上查看"
     },
     "atticus": {
       "triggerTitle": "阿提克斯 — AI 人权顾问",
@@ -1034,7 +1032,9 @@
       "retry": "再试一次",
       "doneTitle": "完成",
       "doneBody": "您已完成人权入门介绍。现在可以浏览提案，一旦获得 SHIELD 或 COUNCIL，即可投票并提交自己的提案。",
-      "toRegistry": "前往登记册"
+      "toRegistry": "前往登记册",
+      "finishing": "确认中…",
+      "finishError": "确认失败，请重试。"
     },
     "card": {
       "brandName": "Human Rights Policy",
@@ -1066,12 +1066,11 @@
       "downloadPng": "下载 PNG"
     },
     "home": {
-      "sessionOpen": "on-chain · 会话已开启",
       "title": "Human Rights Policy DAO",
-      "subtitle": "为人权保护提供去中心化治理。提案、投票与国库——直接来自区块链，无需中介。",
+      "subtitle": "为人权保护提供去中心化治理。",
       "viewProposals": "查看提案",
       "submitProposal": "提交提案",
-      "activeCases": "活跃案件",
+      "activeCases": "进行中的投票",
       "quorum": "法定人数",
       "yourInfluence": "您的 Influence"
     },
@@ -1464,11 +1463,38 @@
       "bodyPlaceholder": "详细说说…",
       "posting": "发布中…",
       "post": "发布"
+    },
+    "violationsMap": {
+      "title": "违规地图",
+      "scopeBadge": "所有国家 · dossier",
+      "level": "级别 {{level}}",
+      "openFullMap": "在 Dossier 上打开完整地图",
+      "loadingMap": "地图加载中...",
+      "hexagonSelected": "已选择六边形（级别 {{level}}）",
+      "reset": "重置",
+      "violationsOnMap": "地图上有 {{count}} 起违规",
+      "popupDate": "日期",
+      "popupCountry": "国家",
+      "violationsInArea": "该区域违规数：{{count}}",
+      "felony": "重罪",
+      "misdemeanor": "轻罪",
+      "infraction": "违规行为",
+      "unspecified": "未指定"
+    },
+    "communityFeed": {
+      "title": "社区动态",
+      "scopeBadge": "地球 · dossier",
+      "noPostsYet": "暂无帖子",
+      "loadMore": "加载更多",
+      "noText": "（无文本）"
     }
   },
   "filtered_by_hexagon": "按六边形筛选",
   "global_view": "全局视图",
   "reset": "重置",
   "your_location": "您的位置",
-  "country_detection_hint": "系统会根据您的位置自动检测国家"
+  "country_detection_hint": "系统会根据您的位置自动检测国家",
+  "captcha_verifying": "验证中...",
+  "captcha_error": "验证 CAPTCHA 失败，请刷新页面重试。",
+  "please_complete_captcha": "请完成 CAPTCHA 验证"
 }

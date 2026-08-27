@@ -40,6 +40,7 @@ function formatExactDate(iso) {
 }
 
 export default function DossierFeed() {
+  const { t } = useTranslation();
   const [posts, setPosts] = useState([]);
   const [cursor, setCursor] = useState(null);
   const [hasMore, setHasMore] = useState(false);
@@ -88,9 +89,9 @@ export default function DossierFeed() {
   return (
     <div className="rounded-2xl border border-hairline bg-surface overflow-hidden">
       <div className="flex items-center justify-between px-4 sm:px-5 py-3 border-b border-hairline">
-        <span className="font-display text-sm text-parchment">Community Feed</span>
+        <span className="font-display text-sm text-parchment">{t("dao.communityFeed.title")}</span>
         <span className="font-mono text-[11px] px-2 py-0.5 rounded-full bg-surface2 text-parchmentDim">
-          planet earth · dossier
+          {t("dao.communityFeed.scopeBadge")}
         </span>
       </div>
 
@@ -101,7 +102,7 @@ export default function DossierFeed() {
             onClick={() => loadPage(false, null)}
             className="px-3 py-1.5 text-xs bg-seal/15 border border-seal/30 text-parchment rounded-lg hover:bg-seal/25 transition-colors"
           >
-            Try again
+            {t("try_again")}
           </button>
         </div>
       )}
@@ -115,7 +116,7 @@ export default function DossierFeed() {
       {!error && !loading && posts.length === 0 && (
         <div className="flex flex-col items-center py-12">
           <Globe className="w-9 h-9 text-parchmentDim/40 mb-3" />
-          <p className="text-sm text-parchmentDim">No posts yet</p>
+          <p className="text-sm text-parchmentDim">{t("dao.communityFeed.noPostsYet")}</p>
         </div>
       )}
 
@@ -133,7 +134,7 @@ export default function DossierFeed() {
             className="px-5 py-2 text-[12px] font-medium text-parchmentDim border border-hairline rounded-lg
               hover:border-verdigris hover:text-verdigrisBright disabled:opacity-40 transition-colors"
           >
-            {loading ? "Loading..." : "Load more"}
+            {loading ? t("loading") : t("dao.communityFeed.loadMore")}
           </button>
         </div>
       )}
@@ -142,7 +143,7 @@ export default function DossierFeed() {
 }
 
 function PostRow({ post }) {
-  const { i18n } = useTranslation();
+  const { t, i18n } = useTranslation();
   const openOnDossier = () =>
     window.open(`${DOSSIER_APP_URL}/post/${post.id}`, "_blank", "noreferrer");
 
@@ -200,7 +201,7 @@ function PostRow({ post }) {
         </div>
 
         <p className="text-parchment/90 text-sm mt-1.5 leading-relaxed line-clamp-4">
-          {post.content || "(no text)"}
+          {post.content || t("dao.communityFeed.noText")}
         </p>
 
         {image && (
@@ -218,7 +219,7 @@ function PostRow({ post }) {
           </span>
           <span className="flex items-center gap-1.5 text-xs ml-auto hover:text-verdigrisBright transition-colors">
             <ExternalLink size={13} strokeWidth={2} />
-            View on Dossier
+            {t("dao.common.viewOnDossier")}
           </span>
         </div>
       </div>

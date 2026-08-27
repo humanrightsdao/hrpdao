@@ -1003,10 +1003,8 @@
       "disconnect": "डिस्कनेक्ट करें",
       "for": "पक्ष में",
       "against": "विरुद्ध",
-      "abstain": "अनुपस्थित"
-    },
-    "footer": {
-      "tagline": "सार्वजनिक शासन रजिस्ट्री"
+      "abstain": "अनुपस्थित",
+      "viewOnDossier": "Dossier पर देखें"
     },
     "atticus": {
       "triggerTitle": "एटिकस — AI मानवाधिकार सलाहकार",
@@ -1034,7 +1032,9 @@
       "retry": "पुनः प्रयास करें",
       "doneTitle": "पूर्ण",
       "doneBody": "आपने मानव अधिकारों का परिचय पूरा कर लिया है। अब आप प्रस्ताव देख सकते हैं, और जैसे ही आपको SHIELD या COUNCIL मिलेगा — वोट दे सकते हैं और अपने प्रस्ताव सबमिट कर सकते हैं।",
-      "toRegistry": "रजिस्ट्री पर जाएं"
+      "toRegistry": "रजिस्ट्री पर जाएं",
+      "finishing": "पुष्टि हो रही है…",
+      "finishError": "पूर्णता की पुष्टि करने में विफल। कृपया पुनः प्रयास करें।"
     },
     "card": {
       "brandName": "Human Rights Policy",
@@ -1066,12 +1066,11 @@
       "downloadPng": "PNG डाउनलोड करें"
     },
     "home": {
-      "sessionOpen": "on-chain · सत्र खुला है",
       "title": "Human Rights Policy DAO",
-      "subtitle": "मानवाधिकार सुरक्षा के लिए विकेंद्रीकृत शासन। प्रस्ताव, मतदान और ट्रेजरी — सीधे ब्लॉकचेन से, बिना किसी मध्यस्थ के।",
+      "subtitle": "मानवाधिकार सुरक्षा के लिए विकेंद्रीकृत शासन।",
       "viewProposals": "प्रस्ताव देखें",
       "submitProposal": "प्रस्ताव सबमिट करें",
-      "activeCases": "सक्रिय मामले",
+      "activeCases": "सक्रिय मतदान",
       "quorum": "कोरम",
       "yourInfluence": "आपकी Influence"
     },
@@ -1464,11 +1463,38 @@
       "bodyPlaceholder": "और बताएं…",
       "posting": "पोस्ट हो रहा है…",
       "post": "पोस्ट करें"
+    },
+    "violationsMap": {
+      "title": "उल्लंघन मानचित्र",
+      "scopeBadge": "सभी देश · dossier",
+      "level": "स्तर {{level}}",
+      "openFullMap": "Dossier पर पूरा मानचित्र खोलें",
+      "loadingMap": "मानचित्र लोड हो रहा है...",
+      "hexagonSelected": "हेक्सागोन चयनित (स्तर {{level}})",
+      "reset": "रीसेट करें",
+      "violationsOnMap": "मानचित्र पर {{count}} उल्लंघन",
+      "popupDate": "तारीख",
+      "popupCountry": "देश",
+      "violationsInArea": "इस क्षेत्र में उल्लंघन: {{count}}",
+      "felony": "गंभीर अपराध",
+      "misdemeanor": "अपराध",
+      "infraction": "मामूली उल्लंघन",
+      "unspecified": "अनिर्दिष्ट"
+    },
+    "communityFeed": {
+      "title": "समुदाय फ़ीड",
+      "scopeBadge": "पृथ्वी ग्रह · dossier",
+      "noPostsYet": "अभी तक कोई पोस्ट नहीं",
+      "loadMore": "और लोड करें",
+      "noText": "(कोई टेक्स्ट नहीं)"
     }
   },
   "filtered_by_hexagon": "हेक्सागोन के अनुसार फ़िल्टर किया गया",
   "global_view": "वैश्विक दृश्य",
   "reset": "रीसेट करें",
   "your_location": "आपका स्थान",
-  "country_detection_hint": "देश आपके स्थान के आधार पर स्वचालित रूप से पहचाना जाता है"
+  "country_detection_hint": "देश आपके स्थान के आधार पर स्वचालित रूप से पहचाना जाता है",
+  "captcha_verifying": "सत्यापित हो रहा है...",
+  "captcha_error": "CAPTCHA सत्यापित करने में विफल। कृपया पेज रीफ्रेश करें।",
+  "please_complete_captcha": "कृपया CAPTCHA सत्यापन पूरा करें"
 }

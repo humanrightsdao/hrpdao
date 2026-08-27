@@ -10,21 +10,43 @@ import {
   XCircle,
   RotateCcw,
 } from "lucide-react";
+import { useAccount, useWalletClient } from "wagmi";
+import { useSignMessage } from "@privy-io/react-auth";
 import { LESSON_STRUCTURE, TEST_STRUCTURE, getRandomTestStructureForUser } from "../i18n/structure";
 import LanguageSelector from "./LanguageSelector";
+import CaptchaGate from "./CaptchaGate";
 
 const POLICY_URL =
   "https://ipfs.io/ipfs/QmfZ4Qg1XiR6Y1Lnm4fnykWi6EhpwmkVSzzVNiiQS6YMSF/";
 
-const flagKey = (addr) => `dao_onboarded_${addr?.toLowerCase()}`;
+// Server-side, signature-verified onboarding record — NOT localStorage.
+// Replaces the old `dao_onboarded_<address>` flag (localStorage.getItem/
+// setItem), which lived only in the browser and reset on "Clear site
+// data" or on a different device. See worker/index.js's
+// handleOnboardingComplete/handleOnboardingStatus for the server side.
+// Must be byte-for-byte identical to worker/index.js's
+// ONBOARDING_COMPLETION_MESSAGE — any difference makes every signature
+// verification fail.
+const ONBOARDING_COMPLETION_MESSAGE =
+  "Confirm DAO onboarding completion — v1";
 
-export function isOnboarded(addr) {
+// GET /api/onboarding/status — read-only, no signature needed (reading
+// whether an address is onboarded isn't sensitive, so this doesn't need
+// proof of wallet ownership the way completing it does).
+export async function checkOnboardingStatus(addr) {
   if (!addr) return true;
-  return localStorage.getItem(flagKey(addr)) === "true";
-}
-
-export function markOnboarded(addr) {
-  if (addr) localStorage.setItem(flagKey(addr), "true");
+  try {
+    const res = await fetch(`/api/onboarding/status?address=${encodeURIComponent(addr)}`);
+    const data = await res.json();
+    return !!data.onboarded;
+  } catch (err) {
+    console.warn("⚠️ Failed to check onboarding status:", err);
+    // Fail OPEN here deliberately: this is an educational gate, not a
+    // security boundary — a transient network/API error shouldn't
+    // trap someone who may have already completed it behind a modal
+    // they can't get past.
+    return true;
+  }
 }
 
 export default function OnboardingOverlay({ account, onDone }) {
@@ -32,10 +54,55 @@ export default function OnboardingOverlay({ account, onDone }) {
   const [step, setStep] = useState("welcome");
   const [visitedPolicy, setVisitedPolicy] = useState(false);
   const [agreed, setAgreed] = useState(false);
+  // Real CAPTCHA (Cloudflare Turnstile, server-side verification) gating
+  // the policy confirmation - required before a wallet can even reach
+  // the lessons/tests, same idea as dossier's account-creation gate.
+  const [captchaVerified, setCaptchaVerified] = useState(false);
+  const [finishing, setFinishing] = useState(false);
+  const [finishError, setFinishError] = useState("");
 
-  function finish() {
-    markOnboarded(account);
-    onDone();
+  // Same embedded-vs-external wallet signing split as
+  // useNostrIdentity.jsx — the fixed message here just proves "this
+  // wallet completed onboarding", it isn't used to derive a key.
+  const { connector } = useAccount();
+  const { data: walletClient } = useWalletClient();
+  const { signMessage: privySignMessage } = useSignMessage();
+
+  async function finish() {
+    setFinishing(true);
+    setFinishError("");
+    try {
+      const isEmbeddedWallet = connector?.id?.startsWith("io.privy.wallet");
+      let signature;
+      if (isEmbeddedWallet) {
+        const result = await privySignMessage(
+          { message: ONBOARDING_COMPLETION_MESSAGE },
+          { uiOptions: { showWalletUIs: false } },
+        );
+        signature = result.signature;
+      } else {
+        if (!walletClient) throw new Error("Wallet not connected");
+        signature = await walletClient.signMessage({
+          account: walletClient.account,
+          message: ONBOARDING_COMPLETION_MESSAGE,
+        });
+      }
+
+      const res = await fetch("/api/onboarding/complete", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ address: account, signature }),
+      });
+      const data = await res.json();
+      if (!data.success) throw new Error(data.error || "server_error");
+
+      onDone();
+    } catch (err) {
+      console.error("⚠️ Failed to record onboarding completion:", err);
+      setFinishError(t("dao.onboarding.finishError"));
+    } finally {
+      setFinishing(false);
+    }
   }
 
   return (
@@ -83,12 +150,26 @@ export default function OnboardingOverlay({ account, onDone }) {
                 </span>
               </label>
 
+              {/* Real CAPTCHA before the policy confirmation can proceed
+                  to lessons/tests - CaptchaGate hits /verify-captcha for
+                  server-side verification on its own. */}
+              {!captchaVerified && (
+                <div className="mb-7">
+                  <CaptchaGate
+                    onVerified={() => setCaptchaVerified(true)}
+                    onError={(reason) => {
+                      console.warn("⚠️ CAPTCHA not passed:", reason);
+                    }}
+                  />
+                </div>
+              )}
+
               <button
                 onClick={() => {
-                  if (!visitedPolicy || !agreed) return;
+                  if (!visitedPolicy || !agreed || !captchaVerified) return;
                   setStep("lessons");
                 }}
-                disabled={!visitedPolicy || !agreed}
+                disabled={!visitedPolicy || !agreed || !captchaVerified}
                 className="w-full flex items-center justify-center gap-1.5 px-5 py-3 rounded-full bg-gradient-to-r from-verdigris to-verdigrisDeep text-white font-medium text-sm hover:opacity-90 transition-opacity disabled:opacity-40 disabled:cursor-not-allowed"
               >
                 {t("dao.onboarding.continue")}
@@ -121,11 +202,17 @@ export default function OnboardingOverlay({ account, onDone }) {
               <p className="text-parchmentDim text-sm leading-relaxed mb-8">
                 {t("dao.onboarding.doneBody")}
               </p>
+              {finishError && (
+                <p className="text-center font-mono text-[12px] text-sealBright mb-3">
+                  {finishError}
+                </p>
+              )}
               <button
                 onClick={finish}
-                className="w-full px-5 py-3 rounded-full bg-gradient-to-r from-verdigris to-verdigrisDeep text-white font-medium text-sm hover:opacity-90 transition-opacity"
+                disabled={finishing}
+                className="w-full px-5 py-3 rounded-full bg-gradient-to-r from-verdigris to-verdigrisDeep text-white font-medium text-sm hover:opacity-90 transition-opacity disabled:opacity-60"
               >
-                {t("dao.onboarding.toRegistry")}
+                {finishing ? t("dao.onboarding.finishing") : t("dao.onboarding.toRegistry")}
               </button>
             </>
           )}

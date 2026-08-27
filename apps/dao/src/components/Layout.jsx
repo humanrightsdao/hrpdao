@@ -24,7 +24,7 @@ import { useDao } from "../hooks/useDao";
 import { usePrivyWalletSync } from "../hooks/usePrivyWalletSync";
 import { useWalletHandoff } from "../hooks/useWalletHandoff";
 import { truncAddr } from "../lib/format";
-import OnboardingOverlay, { isOnboarded, markOnboarded } from "./OnboardingOverlay";
+import OnboardingOverlay, { checkOnboardingStatus } from "./OnboardingOverlay";
 import LanguageSelector from "./LanguageSelector";
 import { SocialLinksRow } from "./SocialIcons";
 import AtticusChat from "./AtticusChat";
@@ -232,13 +232,26 @@ export default function Layout() {
   };
 
   useEffect(() => {
-    if (!dao.isConnected || dao.rights === null) return;
-    if (isOnboarded(dao.account)) return;
-    if (dao.hasShield || dao.hasCouncil || dao.rights > 0) {
-      markOnboarded(dao.account);
-      return;
-    }
-    setShowOnboarding(true);
+    if (!dao.isConnected || dao.rights === null || !dao.account) return;
+    // Already an established member via some other on-chain path
+    // (existing Shield/Council SBT, or activity-based rights already
+    // above zero) — checked live every time rather than cached, so
+    // this exemption doesn't depend on any stored "onboarded" flag at
+    // all. No signature/write needed for this branch.
+    if (dao.hasShield || dao.hasCouncil || dao.rights > 0) return;
+
+    // Server-side, signature-verified record (worker/index.js +
+    // ONBOARDING_KV) — NOT localStorage, survives "Clear site data"
+    // and works from any device for the same wallet. See
+    // OnboardingOverlay.jsx for the write side.
+    let cancelled = false;
+    checkOnboardingStatus(dao.account).then((onboarded) => {
+      if (cancelled) return;
+      if (!onboarded) setShowOnboarding(true);
+    });
+    return () => {
+      cancelled = true;
+    };
   }, [dao.isConnected, dao.rights, dao.hasShield, dao.hasCouncil, dao.account]);
 
   const navLinkClass = ({ isActive }) =>
@@ -426,7 +439,7 @@ export default function Layout() {
         <footer className="border-t border-hairline">
           <div className="max-w-6xl mx-auto px-5 sm:px-8 py-6 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
             <span className="text-[12px] font-mono text-parchmentDim">
-              {t("dao.common.brandLine")} — {t("dao.footer.tagline")}
+              {t("dao.common.brandLine")}
             </span>
             <SocialLinksRow size={16} />
           </div>

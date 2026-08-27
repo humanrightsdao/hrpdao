@@ -1003,10 +1003,8 @@
       "disconnect": "قطع الاتصال",
       "for": "مع",
       "against": "ضد",
-      "abstain": "امتناع"
-    },
-    "footer": {
-      "tagline": "سجل الحوكمة العام"
+      "abstain": "امتناع",
+      "viewOnDossier": "عرض على Dossier"
     },
     "atticus": {
       "triggerTitle": "أتيكوس — مستشار حقوق الإنسان بالذكاء الاصطناعي",
@@ -1034,7 +1032,9 @@
       "retry": "إعادة المحاولة",
       "doneTitle": "تم",
       "doneBody": "لقد أكملت مقدمة حقوق الإنسان. يمكنك الآن تصفح المقترحات، وبمجرد حصولك على SHIELD أو COUNCIL — يمكنك التصويت وتقديم مقترحاتك الخاصة.",
-      "toRegistry": "إلى السجل"
+      "toRegistry": "إلى السجل",
+      "finishing": "جارٍ التأكيد…",
+      "finishError": "فشل تأكيد الإكمال. يرجى المحاولة مرة أخرى."
     },
     "card": {
       "brandName": "Human Rights Policy",
@@ -1066,12 +1066,11 @@
       "downloadPng": "تنزيل PNG"
     },
     "home": {
-      "sessionOpen": "on-chain · الجلسة مفتوحة",
       "title": "Human Rights Policy DAO",
-      "subtitle": "حوكمة لامركزية لحماية حقوق الإنسان. المقترحات والتصويت والخزينة — مباشرة من سلسلة الكتل، دون وسطاء.",
+      "subtitle": "حوكمة لامركزية لحماية حقوق الإنسان.",
       "viewProposals": "عرض المقترحات",
       "submitProposal": "تقديم مقترح",
-      "activeCases": "القضايا النشطة",
+      "activeCases": "التصويتات النشطة",
       "quorum": "النصاب القانوني",
       "yourInfluence": "Influence الخاصة بك"
     },
@@ -1464,11 +1463,38 @@
       "bodyPlaceholder": "أخبرنا بالمزيد…",
       "posting": "جارٍ النشر…",
       "post": "نشر"
+    },
+    "violationsMap": {
+      "title": "خريطة الانتهاكات",
+      "scopeBadge": "جميع الدول · dossier",
+      "level": "المستوى {{level}}",
+      "openFullMap": "فتح الخريطة الكاملة على Dossier",
+      "loadingMap": "جارٍ تحميل الخريطة...",
+      "hexagonSelected": "تم تحديد السداسي (المستوى {{level}})",
+      "reset": "إعادة تعيين",
+      "violationsOnMap": "{{count}} انتهاك على الخريطة",
+      "popupDate": "التاريخ",
+      "popupCountry": "الدولة",
+      "violationsInArea": "الانتهاكات في هذه المنطقة: {{count}}",
+      "felony": "جناية",
+      "misdemeanor": "جنحة",
+      "infraction": "مخالفة",
+      "unspecified": "غير محدد"
+    },
+    "communityFeed": {
+      "title": "موجز المجتمع",
+      "scopeBadge": "كوكب الأرض · dossier",
+      "noPostsYet": "لا توجد منشورات بعد",
+      "loadMore": "تحميل المزيد",
+      "noText": "(بدون نص)"
     }
   },
   "filtered_by_hexagon": "تمت التصفية حسب السداسي",
   "global_view": "عرض عالمي",
   "reset": "إعادة تعيين",
   "your_location": "موقعك",
-  "country_detection_hint": "يتم اكتشاف البلد تلقائيًا بناءً على موقعك"
+  "country_detection_hint": "يتم اكتشاف البلد تلقائيًا بناءً على موقعك",
+  "captcha_verifying": "جارٍ التحقق...",
+  "captcha_error": "فشل التحقق من CAPTCHA. يرجى تحديث الصفحة.",
+  "please_complete_captcha": "يرجى إكمال التحقق من CAPTCHA"
 }

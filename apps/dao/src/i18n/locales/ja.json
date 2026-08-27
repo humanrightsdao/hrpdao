@@ -1003,10 +1003,8 @@
       "disconnect": "切断",
       "for": "賛成",
       "against": "反対",
-      "abstain": "棄権"
-    },
-    "footer": {
-      "tagline": "公開ガバナンス登録簿"
+      "abstain": "棄権",
+      "viewOnDossier": "Dossierで見る"
     },
     "atticus": {
       "triggerTitle": "アティカス — AI人権アドバイザー",
@@ -1034,7 +1032,9 @@
       "retry": "もう一度試す",
       "doneTitle": "完了",
       "doneBody": "人権に関する導入を完了しました。提案を閲覧できるようになり、SHIELDまたはCOUNCILを取得すると、投票や独自の提案の提出ができます。",
-      "toRegistry": "登録簿へ"
+      "toRegistry": "登録簿へ",
+      "finishing": "確認中…",
+      "finishError": "完了の確認に失敗しました。もう一度お試しください。"
     },
     "card": {
       "brandName": "Human Rights Policy",
@@ -1066,12 +1066,11 @@
       "downloadPng": "PNGをダウンロード"
     },
     "home": {
-      "sessionOpen": "on-chain · セッション開始中",
       "title": "Human Rights Policy DAO",
-      "subtitle": "人権保護のための分散型ガバナンス。提案、投票、財務——仲介者なしでブロックチェーンから直接。",
+      "subtitle": "人権保護のための分散型ガバナンス。",
       "viewProposals": "提案を見る",
       "submitProposal": "提案を提出",
-      "activeCases": "進行中の案件",
+      "activeCases": "進行中の投票",
       "quorum": "定足数",
       "yourInfluence": "あなたの Influence"
     },
@@ -1464,11 +1463,38 @@
       "bodyPlaceholder": "詳しく教えてください…",
       "posting": "投稿中…",
       "post": "投稿する"
+    },
+    "violationsMap": {
+      "title": "違反マップ",
+      "scopeBadge": "全ての国 · dossier",
+      "level": "レベル {{level}}",
+      "openFullMap": "Dossierで全体地図を開く",
+      "loadingMap": "地図を読み込み中...",
+      "hexagonSelected": "六角形を選択（レベル {{level}}）",
+      "reset": "リセット",
+      "violationsOnMap": "地図上の違反：{{count}}件",
+      "popupDate": "日付",
+      "popupCountry": "国",
+      "violationsInArea": "このエリアの違反：{{count}}件",
+      "felony": "重罪",
+      "misdemeanor": "軽罪",
+      "infraction": "軽微な違反",
+      "unspecified": "未指定"
+    },
+    "communityFeed": {
+      "title": "コミュニティフィード",
+      "scopeBadge": "地球 · dossier",
+      "noPostsYet": "まだ投稿がありません",
+      "loadMore": "もっと見る",
+      "noText": "（テキストなし）"
     }
   },
   "filtered_by_hexagon": "六角形でフィルタ済み",
   "global_view": "グローバル表示",
   "reset": "リセット",
   "your_location": "あなたの位置",
-  "country_detection_hint": "国はあなたの位置情報から自動的に検出されます"
+  "country_detection_hint": "国はあなたの位置情報から自動的に検出されます",
+  "captcha_verifying": "確認中...",
+  "captcha_error": "CAPTCHAの確認に失敗しました。ページを更新してください。",
+  "please_complete_captcha": "CAPTCHA認証を完了してください"
 }

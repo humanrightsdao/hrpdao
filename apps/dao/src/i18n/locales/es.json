@@ -1003,10 +1003,8 @@
       "disconnect": "Desconectar",
       "for": "A favor",
       "against": "En contra",
-      "abstain": "Abstención"
-    },
-    "footer": {
-      "tagline": "registro público de gobernanza"
+      "abstain": "Abstención",
+      "viewOnDossier": "Ver en Dossier"
     },
     "atticus": {
       "triggerTitle": "Atticus — asesor de IA en derechos humanos",
@@ -1034,7 +1032,9 @@
       "retry": "Intentar de nuevo",
       "doneTitle": "Listo",
       "doneBody": "Ha completado la introducción a los derechos humanos. Ahora puede ver propuestas, y en cuanto reciba SHIELD o COUNCIL — votar y enviar las suyas.",
-      "toRegistry": "Al registro"
+      "toRegistry": "Al registro",
+      "finishing": "Confirmando…",
+      "finishError": "No se pudo confirmar la finalización. Inténtalo de nuevo."
     },
     "card": {
       "brandName": "Human Rights Policy",
@@ -1066,12 +1066,11 @@
       "downloadPng": "Descargar PNG"
     },
     "home": {
-      "sessionOpen": "on-chain · sesión abierta",
       "title": "Human Rights Policy DAO",
-      "subtitle": "Gobernanza descentralizada para la protección de los derechos humanos. Propuestas, votación y tesorería — directamente desde la blockchain, sin intermediarios.",
+      "subtitle": "Gobernanza descentralizada para la protección de los derechos humanos.",
       "viewProposals": "Ver propuestas",
       "submitProposal": "Enviar una propuesta",
-      "activeCases": "Casos activos",
+      "activeCases": "Votaciones activas",
       "quorum": "Quórum",
       "yourInfluence": "Tu Influence"
     },
@@ -1464,11 +1463,38 @@
       "bodyPlaceholder": "Cuéntanos más…",
       "posting": "Publicando…",
       "post": "Publicar"
+    },
+    "violationsMap": {
+      "title": "Mapa de violaciones",
+      "scopeBadge": "todos los países · dossier",
+      "level": "Nivel {{level}}",
+      "openFullMap": "Abrir mapa completo en Dossier",
+      "loadingMap": "Cargando mapa...",
+      "hexagonSelected": "Hexágono seleccionado (nivel {{level}})",
+      "reset": "Restablecer",
+      "violationsOnMap": "{{count}} violaciones en el mapa",
+      "popupDate": "Fecha",
+      "popupCountry": "País",
+      "violationsInArea": "Violaciones en el área: {{count}}",
+      "felony": "Delito grave",
+      "misdemeanor": "Delito menor",
+      "infraction": "Infracción",
+      "unspecified": "Sin especificar"
+    },
+    "communityFeed": {
+      "title": "Feed de la comunidad",
+      "scopeBadge": "planeta Tierra · dossier",
+      "noPostsYet": "Aún no hay publicaciones",
+      "loadMore": "Cargar más",
+      "noText": "(sin texto)"
     }
   },
   "filtered_by_hexagon": "Filtrado por hexágono",
   "global_view": "Vista global",
   "reset": "Restablecer",
   "your_location": "tu ubicación",
-  "country_detection_hint": "El país se detecta automáticamente según tu ubicación"
+  "country_detection_hint": "El país se detecta automáticamente según tu ubicación",
+  "captcha_verifying": "Verificando...",
+  "captcha_error": "Error al verificar el CAPTCHA. Intenta actualizar la página.",
+  "please_complete_captcha": "Por favor, completa la verificación CAPTCHA"
 }

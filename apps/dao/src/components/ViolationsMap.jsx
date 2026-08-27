@@ -17,6 +17,7 @@
 // voting/report actions — the popup's only action button opens the
 // violation on dossier itself, in a new tab.
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
+import { useTranslation } from "react-i18next";
 import { Maximize2, MapPin, Layers, ExternalLink } from "lucide-react";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
@@ -53,16 +54,17 @@ L.Icon.Default.mergeOptions({
     "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png",
 });
 
-function getViolationTypeLabel(violation) {
+function getViolationTypeLabel(violation, t) {
   const category = VIOLATION_CATEGORIES.find(
     (c) => c.id === violation.category_id,
   );
-  const type = category?.types.find((t) => t.id === violation.violation_type_id);
-  if (!category || !type) return violation.violation_type_id || "Unspecified";
+  const type = category?.types.find((vt) => vt.id === violation.violation_type_id);
+  if (!category || !type) return violation.violation_type_id || t("dao.violationsMap.unspecified");
   return `${category.label} → ${type.label}`;
 }
 
 export default function ViolationsMap() {
+  const { t } = useTranslation();
   const [violations, setViolations] = useState([]);
   const [mapLoading, setMapLoading] = useState(true);
   const [mapError, setMapError] = useState("");
@@ -146,14 +148,29 @@ export default function ViolationsMap() {
       worldCopyJump: false,
     });
 
+    // Esri "World Dark Gray Base" — free, no API key required, keeps the
+    // dark aesthetic. Replaces CARTO's basemaps.cartocdn.com/dark_all,
+    // which now requires a paid API key for XYZ tile access.
     L.tileLayer(
-      "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png",
+      "https://services.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}",
       {
         attribution:
-          '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
-        subdomains: "abcd",
-        maxZoom: 19,
+          '&copy; <a href="https://www.esri.com">Esri</a>, &copy; <a href="https://www.openstreetmap.org/copyright">OSM</a>',
+        maxZoom: 16,
+        maxNativeZoom: 16,
         noWrap: true,
+      },
+    ).addTo(mapRef.current);
+
+    // Optional reference layer with country borders / labels, matching
+    // Esri's "World Dark Gray Reference" companion tileset.
+    L.tileLayer(
+      "https://services.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Reference/MapServer/tile/{z}/{y}/{x}",
+      {
+        maxZoom: 16,
+        maxNativeZoom: 16,
+        noWrap: true,
+        pane: "overlayPane",
       },
     ).addTo(mapRef.current);
 
@@ -186,7 +203,7 @@ export default function ViolationsMap() {
           alignItems: "center",
           gap: "6px",
         });
-        container.innerHTML = `<span>${violations.length} violations on map</span>`;
+        container.innerHTML = `<span>${t("dao.violationsMap.violationsOnMap", { count: violations.length })}</span>`;
         container.onclick = () => {
           window.open(`${DOSSIER_APP_URL}/violations-map`, "_blank", "noreferrer");
         };
@@ -217,9 +234,9 @@ export default function ViolationsMap() {
       });
 
       const dateLine = violation.violation_date
-        ? `<div><strong>Date:</strong> ${new Date(violation.violation_date).toLocaleDateString()}</div>`
+        ? `<div><strong>${t("dao.violationsMap.popupDate")}:</strong> ${new Date(violation.violation_date).toLocaleDateString()}</div>`
         : "";
-      const popupContent = `<div class="p-2 min-w-[170px]"><h3 class="font-bold text-gray-700 text-[13px] mb-0.5">${getViolationTypeLabel(violation)}</h3><div class="text-[11px] text-gray-500 space-y-0.5">${dateLine}<div><strong>Country:</strong> ${violation.country_code || "—"}</div></div><a href="${DOSSIER_APP_URL}/violations/${violation.id}" target="_blank" rel="noreferrer" class="mt-1.5 flex items-center justify-center gap-1 w-full py-1 rounded transition-colors text-[11px] bg-[#8B1A2A] hover:bg-[#9B2232] text-white no-underline">View on Dossier ↗</a></div>`;
+      const popupContent = `<div class="p-2 min-w-[170px]"><h3 class="font-bold text-gray-700 text-[13px] mb-0.5">${getViolationTypeLabel(violation, t)}</h3><div class="text-[11px] text-gray-500 space-y-0.5">${dateLine}<div><strong>${t("dao.violationsMap.popupCountry")}:</strong> ${violation.country_code || "—"}</div></div><a href="${DOSSIER_APP_URL}/violations/${violation.id}" target="_blank" rel="noreferrer" class="mt-1.5 flex items-center justify-center gap-1 w-full py-1 rounded transition-colors text-[11px] bg-[#8B1A2A] hover:bg-[#9B2232] text-white no-underline">${t("dao.common.viewOnDossier")} ↗</a></div>`;
 
       const marker = L.marker(
         [parseFloat(violation.latitude), parseFloat(violation.longitude)],
@@ -231,7 +248,7 @@ export default function ViolationsMap() {
 
     if (mapCounterRef.current) {
       mapCounterRef.current.querySelector("span").textContent =
-        `${violations.length} violations on map`;
+        t("dao.violationsMap.violationsOnMap", { count: violations.length });
     }
   }, [violations]);
 
@@ -267,13 +284,13 @@ export default function ViolationsMap() {
       if (count > 0) {
         const severityLabels = [];
         if (severities.felony > 0)
-          severityLabels.push(`🔴 Felony: ${severities.felony}`);
+          severityLabels.push(`🔴 ${t("dao.violationsMap.felony")}: ${severities.felony}`);
         if (severities.misdemeanor > 0)
-          severityLabels.push(`🟠 Misdemeanor: ${severities.misdemeanor}`);
+          severityLabels.push(`🟠 ${t("dao.violationsMap.misdemeanor")}: ${severities.misdemeanor}`);
         if (severities.infraction > 0)
-          severityLabels.push(`🟡 Infraction: ${severities.infraction}`);
+          severityLabels.push(`🟡 ${t("dao.violationsMap.infraction")}: ${severities.infraction}`);
         polygon.bindPopup(
-          `<div class="p-2 min-w-[150px]"><div class="font-bold text-gray-700 text-[13px] mb-0.5">Violations in area: ${count}</div><div class="text-[11px] text-gray-500 space-y-0.5">${severityLabels.map((l) => `<div>${l}</div>`).join("")}</div></div>`,
+          `<div class="p-2 min-w-[150px]"><div class="font-bold text-gray-700 text-[13px] mb-0.5">${t("dao.violationsMap.violationsInArea", { count })}</div><div class="text-[11px] text-gray-500 space-y-0.5">${severityLabels.map((l) => `<div>${l}</div>`).join("")}</div></div>`,
         );
       }
 
@@ -322,9 +339,9 @@ export default function ViolationsMap() {
       <div className="flex items-center justify-between px-4 sm:px-5 py-3 border-b border-hairline">
         <div className="flex items-center gap-2">
           <MapPin size={16} className="text-verdigrisBright" />
-          <span className="font-display text-sm text-parchment">Violations Map</span>
+          <span className="font-display text-sm text-parchment">{t("dao.violationsMap.title")}</span>
           <span className="font-mono text-[11px] px-2 py-0.5 rounded-full bg-surface2 text-parchmentDim">
-            all countries · dossier
+            {t("dao.violationsMap.scopeBadge")}
           </span>
         </div>
         <div className="flex items-center gap-2">
@@ -345,7 +362,7 @@ export default function ViolationsMap() {
                 <button
                   key={level}
                   onClick={() => setHexLevel(level)}
-                  title={`Level ${level}`}
+                  title={t("dao.violationsMap.level", { level })}
                   className={`w-6 h-6 flex items-center justify-center rounded-md text-[11px] font-semibold border transition-colors ${
                     hexLevel === level
                       ? "bg-verdigris border-verdigris text-white"
@@ -362,7 +379,7 @@ export default function ViolationsMap() {
             target="_blank"
             rel="noreferrer"
             className="text-parchmentDim hover:text-parchment"
-            title="Open full map on Dossier"
+            title={t("dao.violationsMap.openFullMap")}
           >
             <Maximize2 size={15} />
           </a>
@@ -378,7 +395,7 @@ export default function ViolationsMap() {
                 onClick={loadViolations}
                 className="px-3 py-1.5 text-xs bg-seal/20 border border-seal/30 text-parchment rounded-lg hover:bg-seal/30 transition-colors"
               >
-                Try again
+                {t("try_again")}
               </button>
             </div>
           </div>
@@ -388,10 +405,28 @@ export default function ViolationsMap() {
           <div className="absolute inset-0 z-40 bg-surface/90 flex items-center justify-center">
             <div className="text-center">
               <div className="w-8 h-8 border-2 border-verdigris/50 border-t-verdigrisBright rounded-full animate-spin mx-auto" />
-              <p className="mt-2 text-xs text-parchmentDim">Loading map...</p>
+              <p className="mt-2 text-xs text-parchmentDim">{t("dao.violationsMap.loadingMap")}</p>
             </div>
           </div>
         )}
+
+        <style>{`
+          .leaflet-control-attribution {
+            font-size: 9px;
+            line-height: 1.1;
+            padding: 1px 4px;
+            max-width: 60vw;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+          }
+          @media (max-width: 480px) {
+            .leaflet-control-attribution {
+              max-width: 40vw;
+              font-size: 8px;
+            }
+          }
+        `}</style>
 
         <div ref={mapContainerRef} className="h-full w-full z-10" />
       </div>
@@ -399,13 +434,13 @@ export default function ViolationsMap() {
       {selectedH3Cell && (
         <div className="flex items-center justify-between px-3 py-2 border-t border-hairline bg-surface2/40">
           <span className="text-[11px] text-parchmentDim">
-            Hexagon selected (level {hexLevel})
+            {t("dao.violationsMap.hexagonSelected", { level: hexLevel })}
           </span>
           <button
             onClick={() => setSelectedH3Cell(null)}
             className="text-[11px] text-parchmentDim hover:text-parchment underline"
           >
-            Reset
+            {t("dao.violationsMap.reset")}
           </button>
         </div>
       )}

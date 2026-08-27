@@ -1004,10 +1004,8 @@
       "disconnect": "Выйти",
       "for": "За",
       "against": "Против",
-      "abstain": "Воздержался"
-    },
-    "footer": {
-      "tagline": "публичный реестр управления"
+      "abstain": "Воздержался",
+      "viewOnDossier": "Смотреть на Dossier"
     },
     "atticus": {
       "triggerTitle": "Аттикус — AI-советник по правам человека",
@@ -1035,7 +1033,9 @@
       "retry": "Попробовать снова",
       "doneTitle": "Готово",
       "doneBody": "Вы прошли введение о правах человека. Теперь вы можете просматривать предложения, а как только получите SHIELD или COUNCIL — голосовать и подавать свои.",
-      "toRegistry": "К реестру"
+      "toRegistry": "К реестру",
+      "finishing": "Подтверждение…",
+      "finishError": "Не удалось подтвердить завершение. Попробуйте снова."
     },
     "card": {
       "brandName": "Human Rights Policy",
@@ -1067,12 +1067,11 @@
       "downloadPng": "Скачать PNG"
     },
     "home": {
-      "sessionOpen": "on-chain · сессия открыта",
       "title": "Human Rights Policy DAO",
-      "subtitle": "Децентрализованное управление защитой прав человека. Предложения, голосование и казна — напрямую из блокчейна, без посредников.",
+      "subtitle": "Децентрализованное управление защитой прав человека.",
       "viewProposals": "Смотреть предложения",
       "submitProposal": "Подать предложение",
-      "activeCases": "Активные дела",
+      "activeCases": "Активные голосования",
       "quorum": "Кворум",
       "yourInfluence": "Ваш Influence"
     },
@@ -1465,10 +1464,37 @@
       "bodyPlaceholder": "Расскажите подробнее…",
       "posting": "Публикация…",
       "post": "Опубликовать"
+    },
+    "violationsMap": {
+      "title": "Карта нарушений",
+      "scopeBadge": "все страны · dossier",
+      "level": "Уровень {{level}}",
+      "openFullMap": "Открыть полную карту на Dossier",
+      "loadingMap": "Загрузка карты...",
+      "hexagonSelected": "Выбран гексагон (уровень {{level}})",
+      "reset": "Сбросить",
+      "violationsOnMap": "{{count}} нарушений на карте",
+      "popupDate": "Дата",
+      "popupCountry": "Страна",
+      "violationsInArea": "Нарушений в этой зоне: {{count}}",
+      "felony": "Тяжкое преступление",
+      "misdemeanor": "Проступок",
+      "infraction": "Мелкое нарушение",
+      "unspecified": "Не указано"
+    },
+    "communityFeed": {
+      "title": "Лента сообщества",
+      "scopeBadge": "планета Земля · dossier",
+      "noPostsYet": "Пока нет публикаций",
+      "loadMore": "Загрузить ещё",
+      "noText": "(без текста)"
     }
   },
   "filtered_by_hexagon": "Отфильтровано по гексагону",
   "global_view": "Глобальный вид",
   "reset": "Сбросить",
-  "your_location": "ваше местоположение"
+  "your_location": "ваше местоположение",
+  "captcha_verifying": "Проверка…",
+  "captcha_error": "Не удалось проверить CAPTCHA. Попробуйте обновить страницу.",
+  "please_complete_captcha": "Пожалуйста, пройдите проверку CAPTCHA"
 }

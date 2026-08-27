@@ -12,6 +12,8 @@
 // This is separate from dossier's own GEMINI_API_KEY secret — each
 // worker needs its own copy.
 
+import { verifyMessage } from "viem";
+
 const MODEL = "gemini-3-flash-preview";
 
 const SYSTEM_PROMPT_TEMPLATE = (
@@ -120,6 +122,186 @@ function json(data, status = 200) {
     status,
     headers: { "Content-Type": "application/json" },
   });
+}
+
+// Same CAPTCHA gate as dossier's worker/index.js (Cloudflare Turnstile,
+// verified server-side). Ported here so dao can gate its own actions
+// (posting to the forum) behind a real, server-verified CAPTCHA instead
+// of trusting a client-side checkmark. Requires the TURNSTILE_SECRET_KEY
+// secret to be set on THIS worker (`dao`):
+//   npx wrangler secret put TURNSTILE_SECRET_KEY
+// or via Cloudflare dashboard → Workers & Pages → dao → Settings →
+// Variables and secrets → Add → type "Secret". This is separate from
+// dossier's own TURNSTILE_SECRET_KEY — each worker needs its own copy
+// (they can share the same Turnstile site/secret key pair if you want
+// the two apps to use one Turnstile widget, or use two different ones).
+// Must NEVER be the public VITE_TURNSTILE_SITE_KEY value — that one is
+// the client-side site key and is fine to be public; this one is the
+// server-side secret used to verify tokens with Cloudflare's API and
+// must stay private.
+async function handleVerifyCaptcha(request, env) {
+  let body;
+  try {
+    body = await request.json();
+  } catch {
+    return json({ success: false, error: "invalid_body" }, 400);
+  }
+
+  const token = body?.token;
+  if (!token || typeof token !== "string") {
+    return json({ success: false, error: "missing_token" }, 400);
+  }
+
+  if (!env.TURNSTILE_SECRET_KEY) {
+    // Fail-closed deliberately: a missing secret should never silently
+    // let everyone through as "verified".
+    console.error(
+      "⚠️ verify-captcha: TURNSTILE_SECRET_KEY is not configured in env vars.",
+    );
+    return json({ success: false, error: "server_misconfigured" }, 500);
+  }
+
+  const ip = request.headers.get("CF-Connecting-IP") || "";
+
+  let verifyData;
+  try {
+    const verifyRes = await fetch(
+      "https://challenges.cloudflare.com/turnstile/v0/siteverify",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          secret: env.TURNSTILE_SECRET_KEY,
+          response: token,
+          remoteip: ip,
+        }),
+      },
+    );
+    verifyData = await verifyRes.json();
+  } catch (err) {
+    console.error(
+      "⚠️ verify-captcha: error reaching the Turnstile API:",
+      err.message,
+    );
+    return json({ success: false, error: "upstream_error" }, 502);
+  }
+
+  if (!verifyData.success) {
+    // Log the real reason (visible via `wrangler tail`) - the frontend
+    // only ever shows a generic "verification_failed" to the user, so
+    // without this the actual cause (expired/duplicate token, hostname
+    // mismatch, wrong secret, etc.) is invisible.
+    console.warn(
+      "⚠️ verify-captcha: Turnstile rejected the token:",
+      verifyData["error-codes"],
+    );
+  }
+
+  return json({ success: !!verifyData.success });
+}
+
+// ── Onboarding completion (server-side, signature-verified) ───────
+//
+// Replaces the old client-only `dao_onboarded_<address>` localStorage
+// flag (src/components/OnboardingOverlay.jsx used to read/write it
+// directly) — that flag lived ONLY in the browser, so "Clear site
+// data" (or a different browser/device) made a member redo the
+// lessons/tests even though nothing about their actual completion had
+// changed. This makes the fact durable and tied to the wallet itself,
+// not the browser:
+//
+//   1. The wallet signs a FIXED message (same idea as
+//      useNostrIdentity.jsx's deterministic Nostr-key derivation —
+//      "prove you control this address" via a signature, not a
+//      transaction, so there's no gas cost).
+//   2. The worker verifies that signature server-side with viem's
+//      verifyMessage() — this recovers the signing address from the
+//      signature and checks it matches the claimed `address`, so
+//      nobody can mark ANOTHER wallet as onboarded.
+//   3. Only then does it write `onboarded:<address>` into
+//      ONBOARDING_KV (a Cloudflare KV namespace — see wrangler.jsonc).
+//
+// This is deliberately NOT on-chain (no contract, no gas for the
+// user) — it's the same "server holds the source of truth, wallet
+// proves identity via signature" pattern already used for the Nostr
+// identity's write-once cache, applied to a durable KV write instead
+// of a session-only cache. See the chat discussion for why a fully
+// on-chain Soulbound Token is the natural next step if/when the DAO
+// wants this to be trustless too (reusing the existing
+// Shield/Council SBT pattern), and why plain localStorage or a
+// deterministic re-derivation (like the Nostr key) don't work here:
+// "did this wallet pass the quiz" is a FACT that has to be recorded
+// somewhere, not a value that can be mathematically re-derived from a
+// signature the way the Nostr key can.
+//
+// Must be byte-for-byte identical between this file and
+// OnboardingOverlay.jsx's ONBOARDING_COMPLETION_MESSAGE — any
+// difference makes every signature verification fail.
+const ONBOARDING_COMPLETION_MESSAGE =
+  "Confirm DAO onboarding completion — v1";
+
+async function handleOnboardingComplete(request, env) {
+  let body;
+  try {
+    body = await request.json();
+  } catch {
+    return json({ success: false, error: "invalid_body" }, 400);
+  }
+
+  const { address, signature } = body || {};
+  if (!address || typeof address !== "string") {
+    return json({ success: false, error: "missing_address" }, 400);
+  }
+  if (!signature || typeof signature !== "string") {
+    return json({ success: false, error: "missing_signature" }, 400);
+  }
+
+  let isValid;
+  try {
+    isValid = await verifyMessage({
+      address,
+      message: ONBOARDING_COMPLETION_MESSAGE,
+      signature,
+    });
+  } catch (err) {
+    console.warn("⚠️ onboarding/complete: signature verification threw:", err.message);
+    return json({ success: false, error: "invalid_signature" }, 400);
+  }
+
+  if (!isValid) {
+    return json({ success: false, error: "invalid_signature" }, 401);
+  }
+
+  if (!env.ONBOARDING_KV) {
+    // Fail-closed deliberately, same reasoning as the CAPTCHA secret
+    // check above: a misconfigured binding should never silently
+    // pretend the write succeeded.
+    console.error("⚠️ onboarding/complete: ONBOARDING_KV is not bound in env vars.");
+    return json({ success: false, error: "server_misconfigured" }, 500);
+  }
+
+  await env.ONBOARDING_KV.put(
+    `onboarded:${address.toLowerCase()}`,
+    JSON.stringify({ completedAt: Date.now() }),
+  );
+
+  return json({ success: true });
+}
+
+async function handleOnboardingStatus(request, env) {
+  const url = new URL(request.url);
+  const address = url.searchParams.get("address");
+  if (!address) {
+    return json({ onboarded: false, error: "missing_address" }, 400);
+  }
+
+  if (!env.ONBOARDING_KV) {
+    console.error("⚠️ onboarding/status: ONBOARDING_KV is not bound in env vars.");
+    return json({ onboarded: false, error: "server_misconfigured" }, 500);
+  }
+
+  const value = await env.ONBOARDING_KV.get(`onboarded:${address.toLowerCase()}`);
+  return json({ onboarded: value !== null });
 }
 
 async function handleChat(request, env) {
@@ -327,6 +509,18 @@ export default {
         return json({ success: false, error: "GEMINI_API_KEY is not configured" }, 500);
       }
       return await handleChatStream(request, env, ctx);
+    }
+
+    if (url.pathname === "/verify-captcha" && request.method === "POST") {
+      return await handleVerifyCaptcha(request, env);
+    }
+
+    if (url.pathname === "/api/onboarding/complete" && request.method === "POST") {
+      return await handleOnboardingComplete(request, env);
+    }
+
+    if (url.pathname === "/api/onboarding/status" && request.method === "GET") {
+      return await handleOnboardingStatus(request, env);
     }
 
     // Everything else: serve the static SPA build (React app, index.html

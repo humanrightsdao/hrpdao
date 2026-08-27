@@ -171,6 +171,17 @@ async function handleVerifyCaptcha(request, env) {
     return json({ success: false, error: "upstream_error" }, 502);
   }
 
+  if (!verifyData.success) {
+    // Log the real reason (visible via `wrangler tail`) - the frontend
+    // only ever shows a generic "verification_failed" to the user, so
+    // without this the actual cause (expired/duplicate token, hostname
+    // mismatch, wrong secret, etc.) is invisible.
+    console.warn(
+      "⚠️ verify-captcha: Turnstile rejected the token:",
+      verifyData["error-codes"],
+    );
+  }
+
   return json({ success: !!verifyData.success });
 }
 

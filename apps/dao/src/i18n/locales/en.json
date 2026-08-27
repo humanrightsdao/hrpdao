@@ -1007,10 +1007,8 @@
       "disconnect": "Disconnect",
       "for": "For",
       "against": "Against",
-      "abstain": "Abstain"
-    },
-    "footer": {
-      "tagline": "public governance registry"
+      "abstain": "Abstain",
+      "viewOnDossier": "View on Dossier"
     },
     "atticus": {
       "triggerTitle": "Atticus — AI human rights advisor",
@@ -1038,7 +1036,9 @@
       "retry": "Try again",
       "doneTitle": "Done",
       "doneBody": "You've completed the human rights introduction. You can now browse proposals, and once you receive SHIELD or COUNCIL — vote and submit your own.",
-      "toRegistry": "To the registry"
+      "toRegistry": "To the registry",
+      "finishing": "Confirming…",
+      "finishError": "Failed to confirm completion. Please try again."
     },
     "card": {
       "brandName": "Human Rights Policy",
@@ -1070,12 +1070,11 @@
       "downloadPng": "Download PNG"
     },
     "home": {
-      "sessionOpen": "on-chain · session open",
       "title": "Human Rights Policy DAO",
-      "subtitle": "Decentralized governance for human rights protection. Proposals, voting, and treasury — straight from the blockchain, no intermediaries.",
+      "subtitle": "Decentralized governance for human rights protection.",
       "viewProposals": "View Proposals",
       "submitProposal": "Submit a Proposal",
-      "activeCases": "Active Cases",
+      "activeCases": "Active Votes",
       "quorum": "Quorum",
       "yourInfluence": "Your Influence"
     },
@@ -1504,7 +1503,34 @@
       "bodyPlaceholder": "Tell us more…",
       "posting": "Posting…",
       "post": "Post"
+    },
+    "violationsMap": {
+      "title": "Violations Map",
+      "scopeBadge": "all countries · dossier",
+      "level": "Level {{level}}",
+      "openFullMap": "Open full map on Dossier",
+      "loadingMap": "Loading map...",
+      "hexagonSelected": "Hexagon selected (level {{level}})",
+      "reset": "Reset",
+      "violationsOnMap": "{{count}} violations on map",
+      "popupDate": "Date",
+      "popupCountry": "Country",
+      "violationsInArea": "Violations in area: {{count}}",
+      "felony": "Felony",
+      "misdemeanor": "Misdemeanor",
+      "infraction": "Infraction",
+      "unspecified": "Unspecified"
+    },
+    "communityFeed": {
+      "title": "Community Feed",
+      "scopeBadge": "planet earth · dossier",
+      "noPostsYet": "No posts yet",
+      "loadMore": "Load more",
+      "noText": "(no text)"
     }
   },
-  "country_detection_hint": "Country is detected automatically based on your location"
+  "country_detection_hint": "Country is detected automatically based on your location",
+  "captcha_verifying": "Verifying...",
+  "captcha_error": "Failed to verify CAPTCHA. Please try refreshing the page.",
+  "please_complete_captcha": "Please complete CAPTCHA verification"
 }

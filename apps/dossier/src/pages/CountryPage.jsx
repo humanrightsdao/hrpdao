@@ -420,14 +420,29 @@ export default function CountryPage() {
       worldCopyJump: false,
     });
 
+    // Esri "World Light Gray Base" — free, no API key required.
+    // Replaces CARTO's basemaps.cartocdn.com/light_all, which now
+    // requires a paid API key for XYZ tile access.
     L.tileLayer(
-      "https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png",
+      "https://services.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Base/MapServer/tile/{z}/{y}/{x}",
       {
         attribution:
-          '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
-        subdomains: "abcd",
-        maxZoom: 19,
+          '&copy; <a href="https://www.esri.com">Esri</a>, &copy; <a href="https://www.openstreetmap.org/copyright">OSM</a>',
+        maxZoom: 16,
+        maxNativeZoom: 16,
         noWrap: true,
+      },
+    ).addTo(mapRef.current);
+
+    // Reference layer with country borders / labels, matching Esri's
+    // "World Light Gray Reference" companion tileset.
+    L.tileLayer(
+      "https://services.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Reference/MapServer/tile/{z}/{y}/{x}",
+      {
+        maxZoom: 16,
+        maxNativeZoom: 16,
+        noWrap: true,
+        pane: "overlayPane",
       },
     ).addTo(mapRef.current);
 
@@ -1276,6 +1291,23 @@ export default function CountryPage() {
                   <style>{`
                     @keyframes map-geo-spin {
                       to { transform: rotate(360deg); }
+                    }
+                    /* Shrink the Leaflet attribution text on small screens
+                       so it doesn't overlap the bottom-left map controls. */
+                    .leaflet-control-attribution {
+                      font-size: 9px;
+                      line-height: 1.1;
+                      padding: 1px 4px;
+                      max-width: 60vw;
+                      white-space: nowrap;
+                      overflow: hidden;
+                      text-overflow: ellipsis;
+                    }
+                    @media (max-width: 480px) {
+                      .leaflet-control-attribution {
+                        max-width: 40vw;
+                        font-size: 8px;
+                      }
                     }
                   `}</style>
 
