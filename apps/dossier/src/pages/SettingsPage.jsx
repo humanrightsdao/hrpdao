@@ -61,6 +61,7 @@ export default function SettingsPage() {
     deriving: nostrDeriving,
     error: nostrError,
     deriveNostrIdentity,
+    ensureLinkedNostrIdentity,
     signEvent: signNostrEvent,
     linkNostrIdentityToLensAccount,
     linking: nostrLinking,
@@ -360,10 +361,12 @@ export default function SettingsPage() {
     }
   };
 
+  const displayNpub = nostrIdentity?.npub || userInfo?.nostrNpub || null;
+
   const handleCopyNpub = async () => {
-    if (!nostrIdentity?.npub) return;
+    if (!displayNpub) return;
     try {
-      await navigator.clipboard.writeText(nostrIdentity.npub);
+      await navigator.clipboard.writeText(displayNpub);
       setNpubCopied(true);
       setTimeout(() => setNpubCopied(false), 2000);
     } catch (err) {
@@ -738,10 +741,15 @@ export default function SettingsPage() {
             )}
 
             {/* Nostr Identity — deterministically derived from the same
-                wallet as the Lens account above (see useNostrIdentity.js);
-                shown here mainly to verify the derivation works end-to-end
-                before building the actual cross-posting/chat features on
-                top of it. */}
+                wallet as the Lens account above (see useNostrIdentity.js).
+                CHANGED: no longer auto-derived/auto-linked on login (that
+                forced a MetaMask popup on every login for external
+                wallets even if the user never opened chat). Nsec is now
+                only ever derived lazily, when the user opens NostrChatPage.
+                So here in Settings we prefer showing the npub Lens already
+                has on record (userInfo.nostrNpub, read with zero wallet
+                interaction) over the live session value, and only offer an
+                explicit, optional way to set it up if it isn't linked yet. */}
             <div className="border-t border-slate-200 dark:border-white/[0.06]" />
             <div className="flex items-start justify-between gap-3 px-3 py-3 bg-slate-100 dark:bg-white/[0.02] border border-slate-300 dark:border-white/[0.06] rounded-xl">
               <div className="min-w-0 flex-1">
@@ -750,11 +758,11 @@ export default function SettingsPage() {
                 >
                   {t("nostr_identity") || "Nostr Identity"}
                 </p>
-                {nostrIdentity ? (
+                {displayNpub ? (
                   <div className="space-y-2">
                     <div className="flex items-center gap-1.5 min-w-0">
                       <p className="text-[14px] font-mono text-purple-700 dark:text-purple-400/60 break-all leading-relaxed">
-                        {nostrIdentity.npub}
+                        {displayNpub}
                       </p>
                       <button
                         onClick={handleCopyNpub}
@@ -768,16 +776,18 @@ export default function SettingsPage() {
                         )}
                       </button>
                     </div>
-                    {/* CHANGED: the manual "Link to my Lens account"
-                        button is gone — most people had no idea what
-                        it did or why they'd need to press it. Linking
-                        now happens automatically in the background
-                        (see the auto-link effect in
-                        useNostrIdentity.jsx) the moment the user logs
-                        in. This is now a passive status line instead
-                        of an action button; a retry button only shows
-                        up if the automatic attempt actually failed. */}
-                    {nostrLinking ? (
+                    {!nostrIdentity ? (
+                      // We have a value straight from Lens metadata —
+                      // already synced by definition, no wallet call
+                      // needed to show or confirm this. The live
+                      // session identity (and the test-publish tool
+                      // below) only appear once chat has actually
+                      // derived it.
+                      <p className="text-[12px] text-emerald-600 dark:text-emerald-400/70 flex items-center gap-1">
+                        <Check className="w-3.5 h-3.5" />
+                        {t("synced_with_lens") || "Synced with your Lens account"}
+                      </p>
+                    ) : nostrLinking ? (
                       <p className="text-[12px] text-purple-700/70 dark:text-purple-300/60 flex items-center gap-1.5">
                         <span className="inline-block w-2.5 h-2.5 rounded-full border border-purple-500/50 border-t-transparent animate-spin" />
                         {t("syncing_with_lens") || "Syncing with Lens…"}
@@ -810,38 +820,40 @@ export default function SettingsPage() {
                     ) : null}
 
                     {/* TEST: end-to-end check that identity → signing →
-                        relay publish actually works, before building
-                        the real cross-posting UI on top of this. */}
-                    <button
-                      onClick={handlePublishTestNote}
-                      disabled={testPublishing}
-                      className="text-[13px] px-3 py-1.5 rounded-lg bg-slate-600/10 dark:bg-white/[0.06] text-slate-700 dark:text-white/70 border border-slate-600/20 dark:border-white/[0.1] hover:bg-slate-600/15 dark:hover:bg-white/[0.1] transition-colors disabled:opacity-50 block"
-                    >
-                      {testPublishing
-                        ? t("publishing") || "Publishing…"
-                        : t("publish_test_note") || "Publish test note"}
-                    </button>
-                    {testPublishResults && (
-                      <div className="text-[12px] space-y-0.5">
-                        {testPublishResults.map((r, i) => (
-                          <p
-                            key={i}
-                            className={
-                              r.ok
-                                ? "text-emerald-600 dark:text-emerald-400/70"
-                                : "text-red-600 dark:text-red-400/70"
-                            }
-                          >
-                            {r.ok ? "✅" : "❌"} {r.url}
-                            {r.reason ? ` — ${r.reason}` : ""}
-                          </p>
-                        ))}
-                      </div>
+                        relay publish actually works. Needs the live
+                        secretKey, so it only shows once chat has
+                        actually derived it this session — not just
+                        from the on-chain npub value shown above. */}
+                    {nostrIdentity && (
+                      <>
+                        <button
+                          onClick={handlePublishTestNote}
+                          disabled={testPublishing}
+                          className="text-[13px] px-3 py-1.5 rounded-lg bg-slate-600/10 dark:bg-white/[0.06] text-slate-700 dark:text-white/70 border border-slate-600/20 dark:border-white/[0.1] hover:bg-slate-600/15 dark:hover:bg-white/[0.1] transition-colors disabled:opacity-50 block"
+                        >
+                          {testPublishing
+                            ? t("publishing") || "Publishing…"
+                            : t("publish_test_note") || "Publish test note"}
+                        </button>
+                        {testPublishResults && (
+                          <div className="text-[12px] space-y-0.5">
+                            {testPublishResults.map((r, i) => (
+                              <p
+                                key={i}
+                                className={
+                                  r.ok
+                                    ? "text-emerald-600 dark:text-emerald-400/70"
+                                    : "text-red-600 dark:text-red-400/70"
+                                }
+                              >
+                                {r.ok ? "✅" : "❌"} {r.url}
+                                {r.reason ? ` — ${r.reason}` : ""}
+                              </p>
+                            ))}
+                          </div>
+                        )}
+                      </>
                     )}
-                    {/* REMOVED: "Open Nostr Chat" button — chat is
-                        already reachable from the main navbar/sidebar
-                        on every page, so a second entry point here in
-                        Settings was redundant clutter. */}
                   </div>
                 ) : nostrError ? (
                   // Auto-derivation failed (e.g. an external wallet's
@@ -864,23 +876,33 @@ export default function SettingsPage() {
                     </button>
                   </div>
                 ) : (
-                  // CHANGED: this used to be a "Show my Nostr identity"
-                  // button the user had to press to kick off
-                  // derivation. Since useNostrIdentity.jsx now derives
-                  // (and links) automatically in the background the
-                  // moment the user is logged in, this branch only
-                  // matters for the brief window before that finishes
-                  // — so it's now a passive status line instead of a
-                  // second confusing purple button that looked almost
-                  // identical to the (already-removed) "Link" one.
-                  <p className="text-[13px] text-slate-500 dark:text-white/40 flex items-center gap-1.5">
-                    {nostrDeriving && (
-                      <span className="inline-block w-2.5 h-2.5 rounded-full border border-purple-500/50 border-t-transparent animate-spin" />
-                    )}
-                    {nostrDeriving
-                      ? t("deriving") || "Setting up…"
-                      : t("preparing_nostr_identity") || "Setting up…"}
-                  </p>
+                  // CHANGED: no on-chain nostr_npub yet AND no live
+                  // session identity — this now means "hasn't opened
+                  // Nostr chat yet" (that's the only place derivation +
+                  // linking is triggered these days), not "briefly
+                  // waiting for an automatic background process to
+                  // finish." So: no spinner, no silent wallet prompt —
+                  // opening chat sets this up naturally, and this
+                  // button is purely an optional shortcut for someone
+                  // who wants it linked without opening chat first.
+                  <div className="space-y-1.5">
+                    <p className="text-[13px] text-slate-500 dark:text-white/40">
+                      {t("nostr_identity_not_set_up") ||
+                        "Set up automatically when you open Chat — or enable it here now."}
+                    </p>
+                    <button
+                      onClick={async () => {
+                        await ensureLinkedNostrIdentity();
+                        await loadUserInfo(true);
+                      }}
+                      disabled={nostrDeriving}
+                      className="text-[13px] px-3 py-1.5 rounded-lg bg-purple-600/10 dark:bg-purple-400/10 text-purple-700 dark:text-purple-300 border border-purple-600/20 dark:border-purple-400/20 hover:bg-purple-600/15 dark:hover:bg-purple-400/15 transition-colors disabled:opacity-50"
+                    >
+                      {nostrDeriving
+                        ? t("deriving") || "Setting up…"
+                        : t("set_up_now") || "Set up now"}
+                    </button>
+                  </div>
                 )}
               </div>
             </div>

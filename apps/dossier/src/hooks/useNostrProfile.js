@@ -3,8 +3,38 @@ import { useNostrRelay } from "./useNostrRelay";
 
 // Module-level cache (shared across all callers/components, mirrors the
 // pattern used by useLensProfile.js) — pubkeyHex -> { name, picture } | null.
-// null means "queried, nothing found" so we don't re-query every mount.
-const cache = new Map();
+//
+// FIXED: negative results (pubkey queried, nothing found) used to be
+// cached as `null` FOREVER (for the rest of the browser session). That
+// collided with a real race: NostrChatPage's own-profile publish effect
+// (kind:0 publish, see that file) runs independently and in parallel
+// with this hook's lookup — nothing coordinates the two. If the lookup
+// query happened to resolve before the publish had actually propagated
+// to any relay (very plausible: publish is itself async, and on a slow/
+// flaky relay set — see lib/nostrRelay.js's comments on relay flakiness
+// — it can take a moment), the lookup got 0 events, cached `null`
+// permanently, and the name/avatar would then NEVER appear for that
+// pubkey again this session — even seconds later once the publish
+// actually succeeded. This is exactly what produced a sent message
+// with no visible name/avatar for a peer whose profile genuinely does
+// exist (including the common self-chat-testing case, where "the peer"
+// is your own just-published profile).
+//
+// Fix: negative results are now cached with a short TTL instead of
+// forever, so a natural remount/re-render (opening the conversation
+// again, switching tabs, etc.) retries the lookup instead of being
+// stuck. Positive results are still cached indefinitely — no reason to
+// ever re-fetch something we already successfully found.
+const cache = new Map(); // pubkeyHex -> {name, picture} | null
+const NEGATIVE_CACHE_TTL_MS = 8000;
+const negativeCacheTimestamps = new Map(); // pubkeyHex -> Date.now() of last negative result
+
+function isCacheFresh(pk) {
+  if (!cache.has(pk)) return false;
+  if (cache.get(pk) !== null) return true; // positive results never expire
+  const checkedAt = negativeCacheTimestamps.get(pk) || 0;
+  return Date.now() - checkedAt < NEGATIVE_CACHE_TTL_MS;
+}
 
 /**
  * Fetches Nostr kind:0 ("set_metadata") profile events for a list of
@@ -32,7 +62,7 @@ export function useNostrProfiles(pubkeyHexList) {
   useEffect(() => {
     if (list.length === 0) return;
 
-    const missing = list.filter((pk) => !cache.has(pk));
+    const missing = list.filter((pk) => !isCacheFresh(pk));
 
     const applyFromCache = () => {
       const result = {};
@@ -69,6 +99,7 @@ export function useNostrProfiles(pubkeyHexList) {
           const ev = latestByAuthor[pk];
           if (!ev) {
             cache.set(pk, null);
+            negativeCacheTimestamps.set(pk, Date.now());
             continue;
           }
           try {
@@ -77,8 +108,10 @@ export function useNostrProfiles(pubkeyHexList) {
               name: meta.display_name || meta.name || null,
               picture: meta.picture || null,
             });
+            negativeCacheTimestamps.delete(pk);
           } catch {
             cache.set(pk, null);
+            negativeCacheTimestamps.set(pk, Date.now());
           }
         }
       } catch (err) {

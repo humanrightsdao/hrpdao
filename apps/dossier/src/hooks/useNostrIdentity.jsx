@@ -412,102 +412,66 @@ function useNostrIdentityState() {
     }
   }, [sessionClient, address, nostrIdentity, deriveNostrIdentity, getWalletClient]);
 
-  // AUTO-LINK: per the product decision to remove the manual "Link to
-  // my Lens account" button — most users had no idea what it was for
-  // or why they'd need to press it. Instead, once the user is logged
-  // in (sessionClient + address available), we silently derive the
-  // Nostr identity and, if the on-chain Lens Account metadata doesn't
-  // already carry a matching nostr_npub attribute, write it — with no
-  // button, no explicit user action.
+  // CHANGED (was AUTO-LINK-ON-LOGIN): this used to fire the moment
+  // sessionClient+address became available — i.e. right after login,
+  // for EVERY user, whether or not they ever opened the chat. For
+  // external wallets (MetaMask etc.) that meant an unavoidable native
+  // "Sign message" popup (and, the first time ever, a second popup to
+  // approve the on-chain setAccountMetadata transaction) on every
+  // single login, regardless of whether Nostr chat was used at all.
   //
-  // Trade-offs worth knowing about if this ever needs revisiting:
-  //  - For Privy EMBEDDED wallets this is fully silent (no signature
-  //    prompt at all, via uiOptions.showWalletUIs:false — see
-  //    deriveNostrIdentity above). For EXTERNAL wallets (MetaMask
-  //    etc.) the wallet's own native "Sign message" popup can still
-  //    appear unprompted shortly after login — that's not something
-  //    this app can suppress, since it's the wallet's own UI, not
-  //    Privy's. It was already happening today on NostrChatPage
-  //    mount; this just centralizes/generalizes the same behavior.
-  //  - Linking does submit an on-chain metadata transaction (the same
-  //    setAccountMetadata write the manual button used to trigger).
-  //    It only runs once per login session (guarded below) and skips
-  //    entirely if the account is already linked, but it's worth
-  //    knowing "no buttons" here still means "one automatic
-  //    transaction the first time," not "zero blockchain activity."
+  // Nostr's own protocol genuinely needs the derived secretKey to
+  // sign/decrypt anything — that part isn't optional. But *when* we
+  // ask for it is a product choice, not a protocol requirement. Moved
+  // to be lazy: the caller (NostrChatPage, on mount) now explicitly
+  // invokes `ensureLinkedNostrIdentity()` only when the user actually
+  // opens the chat — see that page for the call site. Settings no
+  // longer needs this to run at all just to display npub; it reads
+  // the already-on-chain `nostr_npub` value instead (see
+  // SettingsPage.jsx / useLensProfile.js's `nostrNpub`), which
+  // requires no wallet interaction once the one-time link below has
+  // happened at least once from some previous chat visit.
   const autoLinkAttemptedRef = useRef(false);
 
-  useEffect(() => {
-    if (!sessionClient || !address) return;
-    // Already completed (or is completing) an auto-link attempt with
-    // a real identity this session — don't repeat it.
-    if (autoLinkAttemptedRef.current) return;
+  const ensureLinkedNostrIdentity = useCallback(async () => {
+    if (!sessionClient || !address) return null;
+    // Note: deriveNostrIdentity() has its own internal in-flight
+    // guard (derivingRef), so concurrent callers naturally dedupe
+    // into a single signature request.
+    const identity = nostrIdentity || (await deriveNostrIdentity());
+    if (!identity) return null;
 
-    let cancelled = false;
+    // Only ever attempt the on-chain link once per session — whether
+    // it succeeds or fails, retrying automatically on every call
+    // would risk spamming an external wallet's signature prompt.
+    if (autoLinkAttemptedRef.current) return identity;
+    autoLinkAttemptedRef.current = true;
 
-    (async () => {
-      // Note: deriveNostrIdentity() has its own internal in-flight
-      // guard (derivingRef), so concurrent effect firings (e.g. this
-      // hook + NostrChatPage both mounting at once) don't trigger
-      // duplicate signature requests — they naturally dedupe.
-      const identity = nostrIdentity || (await deriveNostrIdentity());
-      // Wallet/derivation not ready yet (e.g. connector still
-      // settling) — DON'T lock the ref; let the effect re-fire once
-      // `nostrIdentity` actually resolves elsewhere, instead of
-      // silently giving up on auto-linking for the rest of the
-      // session.
-      if (!identity || cancelled) return;
+    try {
+      const lensAccountAddress =
+        localStorage.getItem("lens_account_address") || address;
+      const accountResult = await fetchAccount(sessionClient, {
+        address: lensAccountAddress,
+      });
+      if (accountResult.isErr()) return identity;
 
-      // From here on, only ever attempt once per session — whether it
-      // succeeds or fails, retrying automatically on every re-render
-      // would risk spamming an external wallet's signature prompt.
-      autoLinkAttemptedRef.current = true;
+      const existingNpub = (
+        accountResult.value?.metadata?.attributes || []
+      ).find((attr) => attr.key === "nostr_npub")?.value;
 
-      try {
-        const lensAccountAddress =
-          localStorage.getItem("lens_account_address") || address;
-        const accountResult = await fetchAccount(sessionClient, {
-          address: lensAccountAddress,
-        });
-        if (accountResult.isErr()) return;
+      // Already linked and pointing at the current identity — nothing
+      // to do, avoid an unnecessary on-chain write (and an unnecessary
+      // second wallet popup).
+      if (existingNpub === identity.npub) return identity;
 
-        const existingNpub = (
-          accountResult.value?.metadata?.attributes || []
-        ).find((attr) => attr.key === "nostr_npub")?.value;
-
-        // Already linked and pointing at the current identity —
-        // nothing to do, avoid an unnecessary on-chain write.
-        //
-        // DIAGNOSTIC: if this keeps re-linking every reload despite
-        // the identity itself now being cached/stable (see
-        // deriveNostrIdentity above), the values logged here will show
-        // exactly why the comparison isn't matching — e.g. an
-        // account-metadata read that's lagging behind a very recent
-        // write, or a formatting difference between what got written
-        // and what's being compared against.
-        if (existingNpub !== identity.npub) {
-          console.log(
-            "🔎 [Nostr↔Lens link] npub mismatch — will (re-)link:",
-            { existingNpub, currentNpub: identity.npub },
-          );
-        }
-        if (existingNpub === identity.npub) return;
-
-        await linkNostrIdentityToLensAccount();
-      } catch (err) {
-        // Deliberately swallow — this is a background/best-effort
-        // sync, not something that should surface as a blocking error
-        // to a user who never asked for it. linkError below still
-        // gets set by linkNostrIdentityToLensAccount() itself if the
-        // actual write fails, for the rare case something wants to
-        // surface it (e.g. a small non-blocking status indicator).
-        console.warn("⚠️ Auto-link Nostr↔Lens skipped/failed:", err);
-      }
-    })();
-
-    return () => {
-      cancelled = true;
-    };
+      await linkNostrIdentityToLensAccount();
+    } catch (err) {
+      // Best-effort — chat should keep working even if the link write
+      // fails; linkError is still set by linkNostrIdentityToLensAccount
+      // itself for the rare case something wants to surface it.
+      console.warn("⚠️ Nostr↔Lens link skipped/failed:", err);
+    }
+    return identity;
   }, [
     sessionClient,
     address,
@@ -517,6 +481,7 @@ function useNostrIdentityState() {
   ]);
 
   return {
+    ensureLinkedNostrIdentity,
     nostrIdentity, // null until derived; { secretKey, pubkey, npub, nsec } after
     deriving,
     error,

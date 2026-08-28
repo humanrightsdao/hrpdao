@@ -237,6 +237,18 @@ export default function useUserInfo() {
           bio: lensData.bio,
           avatarUrl: lensData.avatar || null,
           country: lensData.country,
+          // FIXED: same bug pattern as the name/dateOfBirth fixes noted
+          // above — lensData.nostrNpub (read from the on-chain
+          // "nostr_npub" account attribute, see useLensProfile.js)
+          // simply wasn't being copied into userData. SettingsPage.jsx
+          // reads userInfo?.nostrNpub specifically to show the npub
+          // WITHOUT needing a wallet call (since it's already on Lens),
+          // but that value was silently always undefined here — so
+          // Settings looked like "not set up yet" and prompted for an
+          // explicit "Set up now" action even for accounts that
+          // already had it linked on-chain, and it reset to nothing on
+          // every reload since it's re-fetched fresh each time.
+          nostrNpub: lensData.nostrNpub || null,
           // ДОДАНО: раніше dateOfBirth/age взагалі не потрапляли в
           // userData для Lens-користувачів (були тільки в старій
           // Supabase-гілці, яку ми щойно прибрали) — getDateOfBirth()/

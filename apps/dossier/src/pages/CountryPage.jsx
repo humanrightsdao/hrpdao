@@ -11,7 +11,6 @@ import {
   CheckCircle,
   ChevronDown,
   ChevronUp,
-  Maximize2,
   Minimize2,
   Map,
   Users,
@@ -1124,7 +1123,7 @@ export default function CountryPage() {
                 }
               >
                 {isMapCollapsed ? (
-                  <Maximize2 className="w-5 h-5 text-blue-600 dark:text-blue-400/70" />
+                  <Map className="w-5 h-5 text-blue-600 dark:text-blue-400/70" />
                 ) : (
                   <Minimize2 className="w-5 h-5 text-blue-600 dark:text-blue-400/70" />
                 )}

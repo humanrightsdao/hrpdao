@@ -201,7 +201,7 @@ export default function NostrChatPage() {
     nostrIdentity,
     deriving,
     error: identityError,
-    deriveNostrIdentity,
+    ensureLinkedNostrIdentity,
     linkNostrIdentityToLensAccount,
     linking,
     linkError,
@@ -209,9 +209,17 @@ export default function NostrChatPage() {
   } = useNostrIdentity();
   const { publishToNostr } = useNostrRelay();
 
+  // CHANGED: was `deriveNostrIdentity()` — only derived the key, never
+  // triggered the one-time Nostr↔Lens link. Linking used to happen
+  // separately via an auto-effect that fired on every login (even
+  // without opening chat). Now that this page is the only place that
+  // actually needs nsec, it's also the one place that should trigger
+  // both the derivation AND the (at-most-once, skipped if already
+  // linked) on-chain link — so a MetaMask user sees the wallet popup(s)
+  // only when they open chat, not on every login.
   useEffect(() => {
-    if (isConnected) deriveNostrIdentity();
-  }, [isConnected, deriveNostrIdentity]);
+    if (isConnected) ensureLinkedNostrIdentity();
+  }, [isConnected, ensureLinkedNostrIdentity]);
 
   // ADDED: publishes a Nostr kind:0 (profile metadata) event with our
   // current Lens name/avatar, so OTHER people's chat windows can show
