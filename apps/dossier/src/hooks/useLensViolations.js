@@ -20,18 +20,19 @@ import { useLensAuth } from "../context/LensAuthContext";
 // from LensAuthContext.getWalletClient() (see below), which resolves
 // correctly regardless of signer type.
 const getViemWalletClient = async (externalWalletClient) => {
-  const lensTestnetChain = chains.testnet;
+  // MIGRATED to Lens Mainnet.
+  const lensChain = chains.mainnet;
 
   if (!externalWalletClient) {
     throw new Error("Wallet not connected");
   }
 
-  if (externalWalletClient.chain?.id !== lensTestnetChain.id) {
+  if (externalWalletClient.chain?.id !== lensChain.id) {
     try {
-      await externalWalletClient.switchChain({ id: lensTestnetChain.id });
+      await externalWalletClient.switchChain({ id: lensChain.id });
     } catch (err) {
       throw new Error(
-        "Please switch your wallet's network to Lens Testnet and try again.",
+        "Please switch your wallet's network to Lens Mainnet and try again.",
       );
     }
   }

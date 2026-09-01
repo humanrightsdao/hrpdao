@@ -90,6 +90,24 @@ const CountryFeed = ({
   const dao = useLensDAO();
   const [reportModalPost, setReportModalPost] = useState(null);
   const [posts, setPosts] = useState([]);
+  // ADDED: guards handleReaction() against double-clicks — a reaction
+  // is a real API round-trip (possibly two calls: clear-opposite +
+  // add/remove), not an instant local update, so without this a fast
+  // double-click could dispatch the same reaction twice concurrently.
+  const [reactingPostIds, setReactingPostIds] = useState(new Set());
+  // FIXED: the state Set above is gated by setReactingPostIds(), which
+  // is async/batched — two clicks landing in the same tick (a real
+  // fast double-click, a duplicate touch-tap event, etc.) can BOTH
+  // read the OLD Set before either update lands, so both slip past the
+  // "already in flight" check and fire the Lens mutation concurrently
+  // (this is consistent with a single click producing multiple
+  // reaction records on the same post). reactingPostIdsRef is a plain
+  // mutable Set that's checked AND marked in the same synchronous
+  // statement, so there's no window for a second call to sneak through
+  // — it's the real gate now; the state copy above is left in place
+  // only in case a future UI (e.g. a spinner on the button) wants to
+  // read it.
+  const reactingPostIdsRef = useRef(new Set());
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [page, setPage] = useState(0);
@@ -188,6 +206,7 @@ const CountryFeed = ({
     repostLensPost,
     addLensReaction,
     removeLensReaction,
+    getLensPost,
   } = useLensPosts(sessionClient, getWalletClient);
 
   // ADDED: normalize h3Cells/h3Cell into a single list of cells for
@@ -215,19 +234,6 @@ const CountryFeed = ({
   useEffect(() => {
     if (sessionRestoring) return;
 
-    const VALID_REACTIONS = new Set(["truth", "false"]);
-    Object.keys(localStorage)
-      .filter((k) => k.startsWith("lens_reaction_"))
-      .forEach((k) => {
-        const val = localStorage.getItem(k);
-        if (!VALID_REACTIONS.has(val)) {
-          console.warn(
-            `🧹 Removing invalid localStorage reaction key: ${k} = "${val}"`,
-          );
-          localStorage.removeItem(k);
-        }
-      });
-
     setPage(0);
     setPosts([]);
     setCursor(null);
@@ -243,29 +249,22 @@ const CountryFeed = ({
     sessionClient,
   ]);
 
-  const withStoredReactionFallback = (postsArray) =>
-    postsArray.map((p) => {
-      if (!p.lens_post_id) return p;
-      const stored =
-        localStorage.getItem(`lens_reaction_${p.lens_post_id}`) || null;
-
-      let truth = p.truth_count || 0;
-      let falseCount = p.false_count || 0;
-
-      if (stored === "truth" && truth === 0) {
-        truth = 1;
-      } else if (stored === "false" && falseCount === 0) {
-        falseCount = 1;
-      }
-
-      return {
-        ...p,
-        my_reaction: stored,
-        truth_count: truth,
-        false_count: falseCount,
-        reactions_count: truth + falseCount,
-      };
-    });
+  // FIXED (root cause of "Правда" duplicating onto "Неправда"): this used
+  // to be withStoredReactionFallback(), which unconditionally overwrote
+  // my_reaction with whatever was in localStorage (`lens_reaction_<id>`)
+  // — even fudging truth_count/false_count up by one to match. Once that
+  // localStorage value drifted from the real Lens backend (e.g. from an
+  // earlier reaction attempt that looked like it succeeded locally but
+  // never actually landed server-side while the wallet-connection bugs
+  // were still present), the app believed the user had an opposite
+  // reaction that didn't really exist. The "switch reactions" cleanup
+  // logic in handleReaction() below then called undoReaction() on that
+  // phantom reaction — and Lens's API does not treat that as a safe
+  // no-op; it can register the reaction instead of clearing it. That's
+  // exactly how clicking "Правда" bumped "Неправда" too. my_reaction now
+  // comes straight from Lens's own operations.hasUpvoted/hasDownvoted
+  // (set in normalizeLensPost, useLensPosts.js) — the real, authoritative
+  // record — so there's nothing left here to override it with.
 
   const loadPosts = async (resetPage = false) => {
     // A new request always "preempts" any previous still-pending slow
@@ -309,7 +308,7 @@ const CountryFeed = ({
           ? lensResult.posts
           : [...posts, ...lensResult.posts];
 
-        setPosts(withStoredReactionFallback(updatedPosts));
+        setPosts(updatedPosts);
         setHasMore(lensResult.hasMore);
         setCursor(lensResult.nextCursor || null);
         setError("");
@@ -357,7 +356,7 @@ const CountryFeed = ({
             ? filteredPagePosts
             : [...posts, ...filteredPagePosts];
 
-          setPosts(withStoredReactionFallback(updatedPosts));
+          setPosts(updatedPosts);
           setHasMore(lensResult.hasMore);
           setCursor(lensResult.nextCursor || null);
           setError("");
@@ -402,7 +401,7 @@ const CountryFeed = ({
           ).values(),
         ).sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
 
-        setPosts(withStoredReactionFallback(dedupedPosts));
+        setPosts(dedupedPosts);
         setHasMore(false);
         setCursor(null);
         setError(
@@ -436,7 +435,7 @@ const CountryFeed = ({
         ? lensResult.posts
         : [...posts, ...lensResult.posts];
 
-      setPosts(withStoredReactionFallback(updatedPosts));
+      setPosts(updatedPosts);
       setHasMore(lensResult.hasMore);
       setCursor(lensResult.nextCursor || null);
       setError("");
@@ -496,23 +495,6 @@ const CountryFeed = ({
     }
   };
 
-  const computePostWithReaction = (basePost, reaction) => {
-    let truth = basePost.truth_count || 0;
-    let falseCount = basePost.false_count || 0;
-    if (basePost.my_reaction === "truth") truth = Math.max(0, truth - 1);
-    if (basePost.my_reaction === "false")
-      falseCount = Math.max(0, falseCount - 1);
-    if (reaction === "truth") truth += 1;
-    if (reaction === "false") falseCount += 1;
-    return {
-      ...basePost,
-      my_reaction: reaction,
-      truth_count: truth,
-      false_count: falseCount,
-      reactions_count: truth + falseCount,
-    };
-  };
-
   const handleReaction = async (postId, reactionType) => {
     if (sessionRestoring) return;
 
@@ -524,72 +506,78 @@ const CountryFeed = ({
 
     const snapshot = posts.find((p) => p.id === postId);
     if (!snapshot?.lens_post_id) return;
+    // FIXED: was `if (reactingPostIds.has(postId)) return;` — reading
+    // React state here left a real race window (see the comment on
+    // reactingPostIdsRef above). Checking-and-marking the ref in one
+    // synchronous step means a second call arriving before this one
+    // has finished is rejected immediately, every time.
+    if (reactingPostIdsRef.current.has(postId)) return;
+    reactingPostIdsRef.current.add(postId);
 
     const lensPostId = snapshot.lens_post_id;
+    // FIXED (root cause of "Правда" duplicating onto "Неправда"): the
+    // previous version computed the next counts itself (+1/-1) and
+    // decided whether to clean up the opposite reaction from a LOCAL
+    // guess (my_reaction from the last render, or — before that —
+    // straight from localStorage). Either source can disagree with
+    // what Lens actually has on record, and calling undoReaction() on a
+    // reaction that doesn't really exist there is not a safe no-op — it
+    // can register that reaction instead of clearing it. There is now
+    // NO client-side math and NO localStorage anywhere in this flow:
+    // we call Lens's API based on the post's current my_reaction (itself
+    // last set from Lens's own operations.hasUpvoted/hasDownvoted), and
+    // once the call succeeds we refetch that exact post from Lens and
+    // replace it wholesale — the screen always shows exactly what Lens
+    // has, never a locally computed approximation.
     const prevReaction = snapshot.my_reaction || null;
     const isTogglingOff = prevReaction === reactionType;
-    const nextReaction = isTogglingOff ? null : reactionType;
     const oppositeType = reactionType === "truth" ? "false" : "truth";
 
-    const patchTo = (reaction) =>
-      setPosts((prev) =>
-        prev.map((p) =>
-          p.id === postId ? computePostWithReaction(snapshot, reaction) : p,
-        ),
-      );
-
-    patchTo(nextReaction);
+    setReactingPostIds((prev) => new Set(prev).add(postId));
 
     try {
-      // FIXED: previously the "defensive cleanup" of the opposite
-      // reaction was called UNCONDITIONALLY on every click — even when
-      // prevReaction === null (the very first vote on the post, no
-      // opposite reaction existed yet). On the Lens testnet, calling
-      // undoReaction() on a nonexistent reaction, as it turns out, is NOT
-      // a safe no-op — it registers itself in the post's stats, so every
-      // time after the very first "Truth" click on a fresh post,
-      // "False: 1" would also appear. Now cleanup is only called if there
-      // really was an opposite reaction (switching False → Truth or vice
-      // versa) — exactly when there's actually something to clean up.
-      if (prevReaction === oppositeType) {
-        const cleanupResult = await removeLensReaction(
-          lensPostId,
-          oppositeType,
-        );
-        if (!cleanupResult.success) {
-          console.warn(
-            "⚠️ Defensive cleanup of the opposite reaction failed:",
-            cleanupResult.error,
-          );
-        }
-      }
-
-      const result = isTogglingOff
-        ? await removeLensReaction(lensPostId, reactionType)
-        : await addLensReaction(lensPostId, reactionType);
-
-      if (!result.success) {
-        throw new Error(
-          result.error ||
-            t("reaction_save_error") ||
-            "Failed to save the reaction",
-        );
-      }
-
-      const storageKey = `lens_reaction_${lensPostId}`;
-      if (nextReaction) {
-        localStorage.setItem(storageKey, nextReaction);
+      if (isTogglingOff) {
+        const result = await removeLensReaction(lensPostId, reactionType);
+        if (!result.success) throw new Error(result.error);
       } else {
-        localStorage.removeItem(storageKey);
+        // Only clear the opposite reaction when it's really there,
+        // per Lens itself (prevReaction), not a guess.
+        if (prevReaction === oppositeType) {
+          const cleanupResult = await removeLensReaction(
+            lensPostId,
+            oppositeType,
+          );
+          if (!cleanupResult.success) {
+            console.warn(
+              "⚠️ Failed to clear the opposite reaction:",
+              cleanupResult.error,
+            );
+          }
+        }
+        const result = await addLensReaction(lensPostId, reactionType);
+        if (!result.success) throw new Error(result.error);
+      }
+
+      const fresh = await getLensPost(lensPostId);
+      if (fresh.success) {
+        setPosts((prev) =>
+          prev.map((p) => (p.id === postId ? { ...p, ...fresh.post } : p)),
+        );
       }
     } catch (err) {
       console.error("❌ Error handling reaction:", err);
-      patchTo(prevReaction);
       alert(
         (t("reaction_save_error") || "Failed to save the reaction") +
           ": " +
           err.message,
       );
+    } finally {
+      reactingPostIdsRef.current.delete(postId);
+      setReactingPostIds((prev) => {
+        const next = new Set(prev);
+        next.delete(postId);
+        return next;
+      });
     }
   };
 

@@ -154,14 +154,19 @@ function PostRow({ post }) {
   return (
     <div
       onClick={openOnDossier}
-      className="flex gap-3 px-4 sm:px-5 py-4 border-b border-hairline last:border-b-0
+      className="px-4 sm:px-5 py-4 border-b border-hairline last:border-b-0
         hover:bg-surface2/50 transition-colors cursor-pointer"
     >
-      {/* CHANGED: hexagon avatar (clip-path-hexagon), matching
-          Identity.jsx/ForumAuthor.jsx and dossier-app's own shape. */}
-      <div className="shrink-0">
+      {/* CHANGED: the avatar + name/handle/country/date header now sits on
+          its own full-width row. The post text/image/footer render below it
+          (full width) instead of in a narrow column squeezed next to the
+          avatar — on narrow screens that column left almost no room for
+          the actual post content. */}
+      <div className="flex items-center gap-3">
+        {/* hexagon avatar (clip-path-hexagon), matching
+            Identity.jsx/ForumAuthor.jsx and dossier-app's own shape. */}
         <span
-          className="clip-path-hexagon block bg-gradient-to-br from-sealBright to-sealDeep p-[1.5px]"
+          className="clip-path-hexagon block bg-gradient-to-br from-sealBright to-sealDeep p-[1.5px] shrink-0"
           style={{ width: 40, height: 44 }}
         >
           <span className="clip-path-hexagon flex w-full h-full items-center justify-center overflow-hidden bg-surface">
@@ -177,18 +182,16 @@ function PostRow({ post }) {
             )}
           </span>
         </span>
-      </div>
 
-      <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-2 flex-wrap">
+        <div className="min-w-0 flex-1 flex items-center gap-2 flex-wrap">
           <span className="text-parchment text-sm font-medium">
             {post.author.name}
           </span>
           <span className="text-parchmentDim text-xs">
             @{post.author.handle || truncAddr(post.author.address)}
           </span>
-          {/* ADDED: author's country, next to the name/handle — same
-              badge dossier itself shows in CountryFeed.jsx. */}
+          {/* author's country, next to the name/handle — same badge
+              dossier itself shows in CountryFeed.jsx. */}
           <span
             className="text-[11px] px-1.5 py-0.5 rounded bg-verdigris/10 border border-verdigris/25
               text-verdigrisBright/85 shrink-0"
@@ -199,8 +202,10 @@ function PostRow({ post }) {
             {formatExactDate(post.createdAt)}
           </span>
         </div>
+      </div>
 
-        <p className="text-parchment/90 text-sm mt-1.5 leading-relaxed line-clamp-4">
+      <div className="mt-2">
+        <p className="text-parchment/90 text-sm leading-relaxed line-clamp-4">
           {post.content || t("dao.communityFeed.noText")}
         </p>
 

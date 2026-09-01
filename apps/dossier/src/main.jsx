@@ -203,17 +203,17 @@ ReactDOM.createRoot(document.getElementById("root")).render(
           },
         },
         loginMethods: ["email", "google", "wallet", "passkey"],
-        // FIXED: this app's actual Lens SDK client (lib/lens.js) runs
-        // on `environment: testnet` — but defaultChain here pointed at
-        // lensChain (MAINNET, id 232). That mismatch is why Privy's
-        // embedded-wallet connect flow was hitting rpc.lens.xyz
-        // (mainnet) and getting "403 Forbidden" — the public mainnet
-        // RPC endpoint doesn't accept the kind of unauthenticated
-        // browser traffic this flow sends, while testnet's RPC does.
-        // defaultChain must match whichever network the rest of the
-        // app (Lens SDK, on-chain writes via handleOperationWith,
-        // etc.) actually operates on.
-        defaultChain: lensTestnet,
+        // MIGRATED to Lens Mainnet: this app's Lens SDK client
+        // (lib/lens.js) now runs on `environment: mainnet`, so
+        // defaultChain here must point at lensChain (MAINNET, id 232)
+        // to match. A mismatch between defaultChain and the SDK
+        // environment previously caused "403 Forbidden" from the RPC
+        // (the public endpoint for one network rejects unauthenticated
+        // browser traffic meant for the other) — defaultChain must
+        // always match whichever network the rest of the app (Lens
+        // SDK, on-chain writes via handleOperationWith, etc.)
+        // actually operates on.
+        defaultChain: lensChain,
         // arbitrumSepolia deliberately NOT included here. It's tempting
         // (DAO writes on the Moderation page need Arbitrum Sepolia), but
         // adding a 3rd chain to Privy's OWN supportedChains list made
@@ -268,7 +268,29 @@ ReactDOM.createRoot(document.getElementById("root")).render(
             reconnectOnMount={false} removes the race entirely — the
             only source of truth for "which wallet is active" is now
             Privy. */}
-        <WagmiProvider config={wagmiConfig} reconnectOnMount={false}>
+        <WagmiProvider
+          config={wagmiConfig}
+          reconnectOnMount={false}
+          // FIXED: this used to be left unset, which meant
+          // @privy-io/wagmi's own internal sync (useSyncPrivyWallets)
+          // only *registered* a wagmi connector for each Privy wallet
+          // but never activated one for a brand-new login — the app
+          // then had to do that itself via a separate effect
+          // (previously in LensAuthContext.jsx), racing the library's
+          // own async connector setup and intermittently failing with
+          // "No wagmi connector found for wallet ...". Passing this
+          // selector makes @privy-io/wagmi do BOTH the setup and the
+          // activation itself, in one place, for whichever wallet we
+          // return here — no second effect needed anywhere else.
+          // Preference mirrors what LensAuthContext used to encode:
+          // the embedded wallet (created via email/Google/passkey)
+          // wins if one exists, otherwise fall back to whichever
+          // wallet Privy reports first (e.g. a linked external one).
+          setActiveWalletForWagmi={({ wallets }) =>
+            wallets.find((w) => w.walletClientType === "privy") ||
+            wallets[0]
+          }
+        >
         <I18nextProvider i18n={i18n}>
           <ThemeProvider>
             <LensAuthProvider>

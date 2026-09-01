@@ -27,6 +27,9 @@ import RankingPage from "./pages/RankingPage";
 import DocsPage from "./pages/DocsPage";
 import ForumPage from "./pages/ForumPage";
 import ForumThreadPage from "./pages/ForumThreadPage";
+import AboutPage from "./pages/AboutPage";
+import PrivacyPage from "./pages/PrivacyPage";
+import TermsPage from "./pages/TermsPage";
 
 // ── Networks ────────────────────────────────────────────────
 // Same set as in hrpdaolens/hrpdaonostr — the DAO site needs to look
@@ -179,6 +182,13 @@ ReactDOM.createRoot(document.getElementById("root")).render(
               <Route path="docs" element={<DocsPage />} />
               <Route path="forum" element={<ForumPage />} />
               <Route path="forum/:id" element={<ForumThreadPage />} />
+              {/* Same pattern as dossier's /about, /terms, /privacy — see
+                  its main.jsx for the equivalent routes. Kept inside the
+                  Layout route so these pages get the same nav/footer as
+                  the rest of the app. */}
+              <Route path="about" element={<AboutPage />} />
+              <Route path="privacy" element={<PrivacyPage />} />
+              <Route path="terms" element={<TermsPage />} />
             </Route>
             {/* Public page with no sidebar — this is exactly where the
                 Business Card's QR code leads, meant to be viewed

@@ -15,13 +15,28 @@ import {
 } from "lucide-react";
 import { useCountry } from "../hooks/useCountry";
 import { deleteMyRatingPost } from "../lib/countryRatings";
-import { setAccountMetadata } from "@lens-protocol/client/actions";
+import { fetchAccount, setAccountMetadata } from "@lens-protocol/client/actions";
 import {
   account as accountMetadata,
   MetadataAttributeType,
 } from "@lens-protocol/metadata";
 import { useLensAuth } from "../context/LensAuthContext";
 import { uploadFileToGrove } from "../lib/grove";
+
+// Lens returns attribute `type` as GraphQL's UPPERCASE enum
+// ("STRING", "BOOLEAN", "NUMBER", "DATE", "JSON"), but
+// @lens-protocol/metadata's accountMetadata() builder validates `type`
+// against its OWN differently-capitalized enum ("String", "Boolean",
+// "Number", "Date", "JSON"). Same mapping used in useNostrIdentity.jsx
+// — needed here too now that we round-trip existing attributes back
+// through the builder instead of only ever writing a fixed set.
+const GRAPHQL_TO_METADATA_ATTRIBUTE_TYPE = {
+  BOOLEAN: MetadataAttributeType.BOOLEAN,
+  DATE: MetadataAttributeType.DATE,
+  NUMBER: MetadataAttributeType.NUMBER,
+  STRING: MetadataAttributeType.STRING,
+  JSON: MetadataAttributeType.JSON,
+};
 
 const AvatarUpload = ({ userInfo, onAvatarUpdated, onUploadingChange }) => {
   const { t } = useTranslation();
@@ -285,7 +300,59 @@ const ProfileEditModal = ({ userInfo, onClose, onSaved }) => {
       const pictureUri = updates.avatarUrl || undefined;
       const displayName = (updates.name || "").trim() || username;
 
+      // FIX: this used to rebuild `attributes` from a fixed set of
+      // fields this form knows about (isAdult, hasAcceptedTerms,
+      // country, h3Index) with NO awareness of anything else already
+      // on-chain — so saving the profile here silently wiped out any
+      // attribute another part of the app had written, most notably
+      // `nostr_npub` (see useNostrIdentity.jsx). Fetching the current
+      // account first and merging into its existing attributes (same
+      // pattern useNostrIdentity.jsx already uses for its own write)
+      // means this form only ever touches the four keys it actually
+      // knows about, and leaves everything else — nostr_npub included
+      // — exactly as it was.
+      const lensAccountAddress =
+        userInfo?.lensAccountAddress ||
+        localStorage.getItem("lens_account_address");
+      let existingAttributes = [];
+      if (lensAccountAddress) {
+        try {
+          const accountResult = await fetchAccount(sessionClient, {
+            address: lensAccountAddress,
+          });
+          if (accountResult.isOk()) {
+            existingAttributes = (
+              accountResult.value?.metadata?.attributes || []
+            )
+              .filter(
+                (attr) =>
+                  !["isAdult", "hasAcceptedTerms", "country", "h3Index"].includes(
+                    attr.key,
+                  ),
+              )
+              .map((attr) => ({
+                key: attr.key,
+                value: attr.value,
+                type:
+                  GRAPHQL_TO_METADATA_ATTRIBUTE_TYPE[attr.type] ||
+                  MetadataAttributeType.STRING,
+              }));
+          } else {
+            console.warn(
+              "⚠️ Could not fetch current Lens account before saving profile — proceeding without merging existing attributes:",
+              accountResult.error,
+            );
+          }
+        } catch (err) {
+          console.warn(
+            "⚠️ Could not fetch current Lens account before saving profile — proceeding without merging existing attributes:",
+            err,
+          );
+        }
+      }
+
       const attributes = [
+        ...existingAttributes,
         { key: "isAdult", value: "true", type: MetadataAttributeType.BOOLEAN },
         {
           key: "hasAcceptedTerms",

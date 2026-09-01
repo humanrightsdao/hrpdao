@@ -1,10 +1,16 @@
 // Minimal Lens client — only for looking up a profile by EOA address.
-// The same testnet environment as in hrpdaolens/src/lib/lens.js.
-import { PublicClient, testnet } from "@lens-protocol/client";
+// MIGRATED to Lens Mainnet, to stay in sync with dossier-app's own
+// src/lib/lens.js (see dossier's CHANGES_MAINNET.md). This client is
+// also used by dossierFeed.js and moderationCheck.js to fetch posts
+// filtered by VITE_LENS_APP_ADDRESS — that address now points at the
+// mainnet App, so querying it against the testnet indexer returns no
+// results, which is why the social feed disappeared after the mainnet
+// cutover.
+import { PublicClient, mainnet } from "@lens-protocol/client";
 import { fetchAccountsAvailable } from "@lens-protocol/client/actions";
 
 export const lensClient = PublicClient.create({
-  environment: testnet,
+  environment: mainnet,
   storage: typeof window !== "undefined" ? window.localStorage : undefined,
 });
 

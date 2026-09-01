@@ -822,7 +822,7 @@ const NotificationsPage = () => {
         />
       )}
 
-      <div className="max-w-4xl mx-auto px-0 lg:px-2">
+      <div>
         {/* Page title — aligned with SettingsPage.
             FIXED: the previous version switched between column/row via
             "sm:" (640px) — but that's a breakpoint on the width of the

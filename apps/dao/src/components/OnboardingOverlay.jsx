@@ -54,6 +54,12 @@ export default function OnboardingOverlay({ account, onDone }) {
   const [step, setStep] = useState("welcome");
   const [visitedPolicy, setVisitedPolicy] = useState(false);
   const [agreed, setAgreed] = useState(false);
+  // Age 18+ confirmation — required before onboarding can proceed, same
+  // idea as dossier's isAdult checkbox on account creation (CreateLensAccount.jsx).
+  // Kept as its own checkbox (not folded into `agreed`) so it's a
+  // separate, explicit affirmative act rather than bundled into the
+  // Human Rights Policy agreement.
+  const [ageConfirmed, setAgeConfirmed] = useState(false);
   // Real CAPTCHA (Cloudflare Turnstile, server-side verification) gating
   // the policy confirmation - required before a wallet can even reach
   // the lessons/tests, same idea as dossier's account-creation gate.
@@ -138,17 +144,62 @@ export default function OnboardingOverlay({ account, onDone }) {
                 <ExternalLink size={14} className="text-parchmentDim shrink-0" />
               </a>
 
-              <label className="flex items-start gap-2.5 mb-7 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={agreed}
-                  onChange={(e) => setAgreed(e.target.checked)}
-                  className="mt-0.5 accent-[#3B7DFF]"
-                />
-                <span className="text-parchmentDim text-xs leading-relaxed">
-                  {t("dao.onboarding.agree")}
-                </span>
-              </label>
+              {/* Confirming age 18+, the Human Rights Policy, the Privacy
+                  Policy and the Terms of Use — same idea as dossier's
+                  confirmation block on CreateLensAccount.jsx, adapted to
+                  this app's two-checkbox flow (the external Policy link
+                  above still has to be opened first via visitedPolicy). */}
+              <div className="rounded-xl border border-hairline bg-surface2/40 p-4 mb-7 space-y-3">
+                <p className="text-parchment text-xs font-medium">
+                  {t("dao.onboarding.confirmTitle")}
+                </p>
+
+                <label className="flex items-start gap-2.5 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={ageConfirmed}
+                    onChange={(e) => setAgeConfirmed(e.target.checked)}
+                    className="mt-0.5 accent-[#3B7DFF]"
+                  />
+                  <span className="text-parchmentDim text-xs leading-relaxed">
+                    {t("dao.onboarding.ageLine")}
+                  </span>
+                </label>
+
+                <label className="flex items-start gap-2.5 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={agreed}
+                    onChange={(e) => setAgreed(e.target.checked)}
+                    className="mt-0.5 accent-[#3B7DFF]"
+                  />
+                  <span className="text-parchmentDim text-xs leading-relaxed">
+                    {t("dao.onboarding.policyLine")}
+                  </span>
+                </label>
+
+                <p className="text-parchmentDim text-xs leading-relaxed pl-[26px]">
+                  {t("dao.onboarding.privacyLinePrefix")}{" "}
+                  <a
+                    href="/privacy"
+                    target="_blank"
+                    rel="noreferrer"
+                    className="text-verdigrisBright hover:underline"
+                  >
+                    {t("dao.onboarding.privacyPolicyLink")}
+                  </a>
+                  {" · "}
+                  {t("dao.onboarding.termsLinePrefix")}{" "}
+                  <a
+                    href="/terms"
+                    target="_blank"
+                    rel="noreferrer"
+                    className="text-verdigrisBright hover:underline"
+                  >
+                    {t("dao.onboarding.termsOfServiceLink")}
+                  </a>
+                </p>
+              </div>
 
               {/* Real CAPTCHA before the policy confirmation can proceed
                   to lessons/tests - CaptchaGate hits /verify-captcha for
@@ -166,10 +217,10 @@ export default function OnboardingOverlay({ account, onDone }) {
 
               <button
                 onClick={() => {
-                  if (!visitedPolicy || !agreed || !captchaVerified) return;
+                  if (!visitedPolicy || !agreed || !ageConfirmed || !captchaVerified) return;
                   setStep("lessons");
                 }}
-                disabled={!visitedPolicy || !agreed || !captchaVerified}
+                disabled={!visitedPolicy || !agreed || !ageConfirmed || !captchaVerified}
                 className="w-full flex items-center justify-center gap-1.5 px-5 py-3 rounded-full bg-gradient-to-r from-verdigris to-verdigrisDeep text-white font-medium text-sm hover:opacity-90 transition-opacity disabled:opacity-40 disabled:cursor-not-allowed"
               >
                 {t("dao.onboarding.continue")}

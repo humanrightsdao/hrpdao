@@ -411,16 +411,48 @@ export default function CreateLensAccount() {
       const localName = normalizeUsername(formData.unique_name.trim());
 
       // Last line of defense against race conditions: check once more right before submitting
-      const finalCheck = await canCreateUsername(sessionClient, {
-        localName,
-      });
-      if (
-        finalCheck.isErr() ||
-        finalCheck.value.__typename !== "NamespaceOperationValidationPassed"
-      ) {
-        setUsernameStatus("taken");
-        setUsernameMessage(t("name_already_taken"));
-        setError(t("name_already_taken"));
+      let finalCheck;
+      try {
+        finalCheck = await canCreateUsername(sessionClient, { localName });
+      } catch (networkErr) {
+        // Transport/network failure (proxy down, DNS, offline, etc.) —
+        // canCreateUsername itself threw instead of resolving to a
+        // Result. This is NOT "username taken", it's "we couldn't ask".
+        console.error("canCreateUsername network error:", networkErr);
+        setUsernameStatus("error");
+        setUsernameMessage(t("name_check_error"));
+        setError(t("name_check_error"));
+        setSubmitting(false);
+        return;
+      }
+
+      if (finalCheck.isErr()) {
+        // The Lens SDK returned an error Result (e.g. the underlying
+        // request failed or the API responded with an error) — still
+        // not evidence the name is taken, just that we couldn't verify.
+        console.error("canCreateUsername isErr:", finalCheck.error);
+        setUsernameStatus("error");
+        setUsernameMessage(t("name_check_error"));
+        setError(t("name_check_error"));
+        setSubmitting(false);
+        return;
+      }
+
+      if (finalCheck.value.__typename !== "NamespaceOperationValidationPassed") {
+        // A real, successfully-received answer from Lens saying this
+        // name can't be used right now.
+        if (finalCheck.value.__typename === "UsernameTaken") {
+          setUsernameStatus("taken");
+          setUsernameMessage(t("name_already_taken"));
+          setError(t("name_already_taken"));
+        } else {
+          // NamespaceOperationValidationFailed or any other typename —
+          // surface the API's own reason when it gives one.
+          const reason = finalCheck.value.reason || t("name_not_allowed");
+          setUsernameStatus("invalid");
+          setUsernameMessage(reason);
+          setError(reason);
+        }
         setSubmitting(false);
         return;
       }

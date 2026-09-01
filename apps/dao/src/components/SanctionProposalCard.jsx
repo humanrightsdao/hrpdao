@@ -10,7 +10,9 @@
 // show a preview of the reported post. This app has no Lens
 // integration and shouldn't grow one just to render a preview — the
 // content lives in Dossier, so we link out to it there instead
-// (VITE_DOSSIER_APP_URL/moderation?case=<id>), the same handoff
+// (VITE_DOSSIER_APP_URL/governance?case=<id>) — Dossier has no
+// standalone "/moderation" route, ModerationQueue is mounted on its
+// "/governance" page (see GovernancePage.jsx), the same handoff
 // pattern Dossier's own GovernanceRedirect uses in reverse.
 
 import { useTranslation } from "react-i18next";
@@ -76,7 +78,12 @@ export default function SanctionProposalCard({
             )}
           </h3>
           <p className="font-mono text-xs text-parchmentDim mt-1 flex items-center gap-1.5 flex-wrap">
-            <Identity address={p.target} size={32} />
+            {/* showBadge=false: the moderation queue lists the target
+                of a sanction case, not a post author — the "Social"
+                source badge (Lens/Nostr) is meaningless noise here,
+                unlike on ProposalsPage/Business Card where Identity
+                shows who's actually posting/proposing. */}
+            <Identity address={p.target} size={32} showBadge={false} />
           </p>
         </div>
         <span className="status-stamp" style={{ "--stamp-color": statusColor }}>
@@ -85,7 +92,7 @@ export default function SanctionProposalCard({
       </div>
 
       <a
-        href={`${DOSSIER_APP_URL}/moderation?case=${p.id}`}
+        href={`${DOSSIER_APP_URL}/governance?case=${p.id}`}
         target="_blank"
         rel="noopener noreferrer"
         className="inline-flex items-center gap-1.5 font-mono text-xs text-verdigrisBright hover:underline"

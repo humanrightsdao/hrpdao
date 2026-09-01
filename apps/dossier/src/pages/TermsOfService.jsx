@@ -48,7 +48,7 @@ export default function TermsOfService() {
             {t("terms_of_service_title")}
           </h1>
           <p className={`text-[14px] ${subText} mt-2`}>
-            {t("terms_last_updated")}: 18 {t("january")} 2026
+            {t("terms_last_updated")}: 28 {t("august")} 2026
           </p>
         </div>
 
@@ -83,7 +83,22 @@ export default function TermsOfService() {
           <p>{t("terms_lens_nature_description")}</p>
 
           <h2 className="text-2xl font-bold mt-8 mb-4">
-            2. {t("terms_prohibited_content")}
+            2. {t("terms_ai_disclaimer_title")}
+          </h2>
+          <p>{t("terms_ai_disclaimer_description")}</p>
+
+          <h2 className="text-2xl font-bold mt-8 mb-4">
+            3. {t("terms_tips_title")}
+          </h2>
+          <p>{t("terms_tips_description")}</p>
+
+          <h2 className="text-2xl font-bold mt-8 mb-4">
+            4. {t("terms_chat_title")}
+          </h2>
+          <p>{t("terms_chat_description")}</p>
+
+          <h2 className="text-2xl font-bold mt-8 mb-4">
+            5. {t("terms_prohibited_content")}
           </h2>
           <p>{t("terms_prohibited_content_description")}:</p>
           <ul className="list-disc pl-6 mt-2 space-y-2">
@@ -96,16 +111,16 @@ export default function TermsOfService() {
           </ul>
 
           <h2 className="text-2xl font-bold mt-8 mb-4">
-            3. {t("terms_disclaimer")}
+            6. {t("terms_disclaimer")}
           </h2>
 
           <h3 className="text-xl font-semibold mt-6 mb-3">
-            3.1. {t("terms_as_is")}
+            6.1. {t("terms_as_is")}
           </h3>
           <p>{t("terms_as_is_description")}</p>
 
           <h3 className="text-xl font-semibold mt-6 mb-3">
-            3.2. {t("terms_limitation_of_liability")}
+            6.2. {t("terms_limitation_of_liability")}
           </h3>
           <p>{t("terms_limitation_1")}</p>
           <ul className="list-disc pl-6 mt-2 space-y-2">
@@ -116,31 +131,36 @@ export default function TermsOfService() {
           </ul>
 
           <h3 className="text-xl font-semibold mt-6 mb-3">
-            3.3. {t("terms_damages_exclusion")}
+            6.3. {t("terms_damages_exclusion")}
           </h3>
           <p>{t("terms_damages_exclusion_description")}</p>
 
           <h2 className="text-2xl font-bold mt-8 mb-4">
-            4. {t("terms_license_grant")}
+            7. {t("terms_license_grant")}
           </h2>
           <p>{t("terms_license_grant_description")}</p>
 
           <h2 className="text-2xl font-bold mt-8 mb-4">
-            5. {t("terms_moderation_deletion")}
+            8. {t("terms_moderation_deletion")}
           </h2>
 
           <h3 className="text-xl font-semibold mt-6 mb-3">
-            5.1. {t("terms_right_to_remove")}
+            8.1. {t("terms_right_to_remove")}
           </h3>
           <p>{t("terms_right_to_remove_description")}</p>
 
           <h3 className="text-xl font-semibold mt-6 mb-3">
-            5.2. {t("terms_no_notification")}
+            8.2. {t("terms_no_notification")}
           </h3>
           <p>{t("terms_no_notification_description")}</p>
 
+          <h3 className="text-xl font-semibold mt-6 mb-3">
+            8.3. {t("terms_dao_moderation_title")}
+          </h3>
+          <p>{t("terms_dao_moderation_description")}</p>
+
           <h2 className="text-2xl font-bold mt-8 mb-4">
-            6. {t("terms_evidence_obligations")}
+            9. {t("terms_evidence_obligations")}
           </h2>
           <p>{t("terms_evidence_obligations_description")}:</p>
           <ul className="list-disc pl-6 mt-2 space-y-2">
@@ -150,31 +170,31 @@ export default function TermsOfService() {
           </ul>
 
           <h2 className="text-2xl font-bold mt-8 mb-4">
-            7. {t("terms_access_termination")}
+            10. {t("terms_access_termination")}
           </h2>
           <p>{t("terms_access_termination_description")}</p>
 
           <h2 className="text-2xl font-bold mt-8 mb-4">
-            8. {t("terms_changes")}
+            11. {t("terms_changes")}
           </h2>
           <p>{t("terms_changes_description")}</p>
 
           <h2 className="text-2xl font-bold mt-8 mb-4">
-            9. {t("terms_governing_law_disputes")}
+            12. {t("terms_governing_law_disputes")}
           </h2>
 
           <h3 className="text-xl font-semibold mt-6 mb-3">
-            9.1. {t("terms_governing_law")}
+            12.1. {t("terms_governing_law")}
           </h3>
           <p>{t("terms_governing_law_description")}</p>
 
           <h3 className="text-xl font-semibold mt-6 mb-3">
-            9.2. {t("terms_dispute_resolution")}
+            12.2. {t("terms_dispute_resolution")}
           </h3>
           <p>{t("terms_dispute_resolution_description")}</p>
 
           <h2 className="text-2xl font-bold mt-8 mb-4">
-            10. {t("terms_contact")}
+            13. {t("terms_contact")}
           </h2>
           <p>{t("terms_contact_description")}</p>
 

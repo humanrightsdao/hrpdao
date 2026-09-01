@@ -400,7 +400,7 @@ const ViolationsListPage = () => {
 
       {/* Main page - displayed only if create post modal is not open */}
       {!showCreatePostModal && (
-        <div className="pt-3 pb-3 px-0 lg:p-4">
+        <div>
           {/* Header with title and navigation buttons.
               FIXED: the previous version switched between column/row via
               "sm:" (640px) — but that's a breakpoint on the width of the

@@ -88,6 +88,10 @@ contract InfluenceRegistry is AccessControl {
     ///         decay, ніж самі донати.
     bytes32 public constant ACTIVITY_ROLE = keccak256("ACTIVITY_ROLE");
 
+    /// @notice Роль для контрольованої крос-чейн/крос-деплой міграції —
+    ///         див. ідентичний коментар у ShieldSBT.sol.
+    bytes32 public constant MIGRATION_ROLE = keccak256("MIGRATION_ROLE");
+
     uint256 public constant DECAY_BPS       = 1_000;  // 10% річних, складно (compound) — узгоджене значення
     uint256 public constant BPS_DENOMINATOR = 10_000;
     uint256 public constant YEAR            = 365 days;
@@ -257,6 +261,86 @@ contract InfluenceRegistry is AccessControl {
         _activityCheckpoints[author].push(uint48(block.timestamp), uint208(block.timestamp));
 
         emit InfluenceAwarded(author, amount, effectiveAmount, influence[author], postRef);
+    }
+
+    /**
+     * @notice Імпортувати Influence-баланс одного акаунта з іншого деплою
+     *         (крос-чейн чи інша причина міграції — див.
+     *         CROSS_CHAIN_MIGRATION_DESIGN.md). Викликається ЛИШЕ адресою
+     *         з MIGRATION_ROLE, ПІСЛЯ верифікації Merkle-proof цього
+     *         акаунта в MigrationClaim.
+     * @param account                        Отримувач.
+     * @param amount                         `influence[account]` зі знімку
+     *                                        джерела (значення ДО decay —
+     *                                        той самий "сирий" кумулятивний
+     *                                        облік, що веде award(); НЕ
+     *                                        effectiveAmount).
+     * @param originalLastActivityTimestamp  `lastActivityTimestamp[account]`
+     *                                        зі знімку джерела — ЗБЕРІГАЄ
+     *                                        точку відліку затухання. Якщо
+     *                                        тут поставити block.timestamp
+     *                                        замість оригінального
+     *                                        значення, decay-годинник
+     *                                        хибно "перезапуститься", і
+     *                                        акаунт отримає ефективно
+     *                                        БІЛЬШЕ Influence, ніж мав
+     *                                        право.
+     * @dev Захист від подвійного виклику: require(influence[account]==0 &&
+     *      lastActivityTimestamp[account]==0) — акаунт, що вже мав ЖИВУ
+     *      активність (award()) до свого міграційного claim, більше не
+     *      може бути "переписаний" імпортом.
+     */
+    function migrationSetInfluence(
+        address account,
+        uint256 amount,
+        uint256 originalLastActivityTimestamp
+    )
+        external
+        onlyRole(MIGRATION_ROLE)
+    {
+        require(account != address(0), "Influence: zero address");
+        require(influence[account] == 0 && lastActivityTimestamp[account] == 0, "Influence: account not empty");
+        require(
+            originalLastActivityTimestamp > 0 && originalLastActivityTimestamp <= block.timestamp,
+            "Influence: invalid timestamp"
+        );
+
+        if (amount == 0) return; // акаунт існував (напр. лише Shield), але без award()-історії — нічого імпортувати
+
+        influence[account]             = amount;
+        lastActivityTimestamp[account] = originalLastActivityTimestamp;
+
+        _influenceCheckpoints[account].push(uint48(block.timestamp), uint208(amount));
+        _activityCheckpoints[account].push(uint48(block.timestamp), uint208(originalLastActivityTimestamp));
+
+        emit InfluenceAwarded(account, amount, amount, amount, bytes32(0)); // postRef=0 маркує "міграційний імпорт", не звичайний tip
+    }
+
+    /**
+     * @notice Одноразово перенести projectStartTimestamp з попереднього
+     *         деплою — інакше "вік проєкту" (від якого рахується
+     *         грейс-період ShieldSBT._currentGraceDuration і мережева
+     *         стадія networkStage()) хибно почав би відлік заново від дня
+     *         нового деплою, ігноруючи вже прожиту історію DAO. Викликати
+     *         ОДРАЗУ після деплою, ДО першого migrationSetInfluence/
+     *         migrationMint. У ЗВИЧАЙНОМУ (не-міграційному) генезисі просто
+     *         НЕ викликається — projectStartTimestamp сам виставляється
+     *         на block.timestamp першого органічного award().
+     */
+    function migrationSetProjectStart(uint256 originalProjectStartTimestamp) external onlyRole(MIGRATION_ROLE) {
+        require(projectStartTimestamp == 0, "Influence: project start already set");
+        require(
+            originalProjectStartTimestamp > 0 && originalProjectStartTimestamp <= block.timestamp,
+            "Influence: invalid timestamp"
+        );
+        projectStartTimestamp = originalProjectStartTimestamp;
+    }
+
+    /// @notice Видати/відкликати MIGRATION_ROLE контракту MigrationClaim.
+    function setMigrationClaim(address claimContract, bool enabled) external onlyRole(DAO_ROLE) {
+        require(claimContract != address(0), "Influence: zero migration claim");
+        if (enabled) _grantRole(MIGRATION_ROLE, claimContract);
+        else _revokeRole(MIGRATION_ROLE, claimContract);
     }
 
     /**

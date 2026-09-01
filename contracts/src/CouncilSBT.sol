@@ -51,6 +51,10 @@ contract CouncilSBT is ERC721, AccessControl {
     ///         сам собі адмін.
     bytes32 public constant DAO_ROLE = keccak256("DAO_ROLE");
 
+    /// @notice Роль для контрольованої крос-чейн/крос-деплой міграції —
+    ///         див. ідентичний коментар у ShieldSBT.sol.
+    bytes32 public constant MIGRATION_ROLE = keccak256("MIGRATION_ROLE");
+
     // ── Конфігурація ─────────────────────────────────────────────
     InfluenceRegistry public immutable influenceRegistry;
     ShieldSBT      public immutable shieldSBT;
@@ -153,6 +157,52 @@ contract CouncilSBT is ERC721, AccessControl {
 
         emit Locked(tid);
         emit CouncilMinted(msg.sender, tid);
+    }
+
+    /**
+     * @notice Мінтить CouncilSBT без live-перевірки Influence/стажу/
+     *         humanity — для контрольованої міграції (Merkle-proof уже
+     *         верифікований MigrationClaim). Викликається ЛИШЕ адресою
+     *         з MIGRATION_ROLE, і ЛИШЕ ПІСЛЯ (у тій самій транзакції)
+     *         ShieldSBT.migrationMint для цього ж акаунта, якщо
+     *         hasShield==true в листку — інакше shieldSBT.isMember()
+     *         нижче поверне false і виклик revert-не.
+     * @param account          Отримувач.
+     * @param originalMintedAt `memberSince` зі знімку джерела — стаж у
+     *                          статусі Consul зберігається так само, як і
+     *                          для Shield (див. NatSpec ShieldSBT.migrationMint).
+     */
+    function migrationMint(address account, uint256 originalMintedAt)
+        external
+        onlyRole(MIGRATION_ROLE)
+    {
+        require(account != address(0), "Council: zero account");
+        require(accountToTokenId[account] == 0, "Council: already member");
+        require(shieldSBT.isMember(account), "Council: Shield must be active");
+        require(originalMintedAt > 0 && originalMintedAt <= block.timestamp, "Council: invalid originalMintedAt");
+
+        _tokenIdCounter++;
+        _totalSupply++;
+        _activeSupply++;
+        uint256 tid = _tokenIdCounter;
+
+        accountToTokenId[account] = tid;
+        memberSince[account]      = originalMintedAt;
+        _countedActive[account]   = true;
+        _mint(account, tid);
+        _totalSupplyCheckpoints.push(uint48(block.timestamp), uint208(_totalSupply));
+        _activeSupplyCheckpoints.push(uint48(block.timestamp), uint208(_activeSupply));
+
+        emit Locked(tid);
+        emit CouncilMinted(account, tid);
+    }
+
+    /// @notice Видати/відкликати MIGRATION_ROLE контракту MigrationClaim.
+    ///         Той самий принцип, що setDisciplineModule нижче.
+    function setMigrationClaim(address claimContract, bool enabled) external onlyRole(DAO_ROLE) {
+        require(claimContract != address(0), "Council: zero migration claim");
+        if (enabled) _grantRole(MIGRATION_ROLE, claimContract);
+        else _revokeRole(MIGRATION_ROLE, claimContract);
     }
 
     // ── ERC-5192: завжди locked ─────────────────────────────────

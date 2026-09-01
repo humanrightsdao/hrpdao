@@ -48,7 +48,7 @@ export default function PrivacyPage() {
             {t("privacy_policy_title")}
           </h1>
           <p className={`text-[14px] ${subText} mt-2`}>
-            {t("privacy_last_updated")}: 21 {t("august")} 2026
+            {t("privacy_last_updated")}: 28 {t("august")} 2026
           </p>
         </div>
 
@@ -154,19 +154,41 @@ export default function PrivacyPage() {
           <p>{t("privacy_nostr_identity_autolink")}</p>
           <p>{t("privacy_nostr_identity_control")}</p>
 
+          <h3 className="text-xl font-semibold mt-6 mb-3">
+            5.5. {t("privacy_cross_app_title")}
+          </h3>
+          <p>{t("privacy_cross_app_description")}</p>
+
           <h2 className="text-2xl font-bold mt-8 mb-4">
-            6. {t("privacy_storage_deletion")}
+            6. {t("privacy_ai_title")}
+          </h2>
+          <p>{t("privacy_ai_description")}</p>
+
+          <h2 className="text-2xl font-bold mt-8 mb-4">
+            7. {t("privacy_tips_title")}
+          </h2>
+          <p>{t("privacy_tips_description")}</p>
+
+          <h2 className="text-2xl font-bold mt-8 mb-4">
+            8. {t("privacy_storage_deletion")}
           </h2>
           <p>{t("privacy_storage_content")}</p>
           <p>{t("privacy_deletion_account")}</p>
 
           <h2 className="text-2xl font-bold mt-8 mb-4">
-            7. {t("privacy_third_party_sharing")}
+            9. {t("privacy_third_party_sharing")}
           </h2>
           <p>{t("privacy_sharing_description")}:</p>
           <ul className="list-disc pl-6 mt-2 space-y-2">
             <li>
+              <strong>Privy</strong> — {t("privacy_sharing_privy_description")}
+            </li>
+            <li>
               <strong>Supabase</strong> — {t("privacy_sharing_supabase")}
+            </li>
+            <li>
+              <strong>{t("privacy_sharing_gemini")}</strong> —{" "}
+              {t("privacy_sharing_gemini_description")}
             </li>
             <li>
               <strong>{t("privacy_sharing_hosting")}</strong> —{" "}
@@ -176,7 +198,7 @@ export default function PrivacyPage() {
           <p className="mt-4 font-semibold">{t("privacy_no_selling")}</p>
 
           <h2 className="text-2xl font-bold mt-8 mb-4">
-            8. {t("privacy_your_rights_gdpr")}
+            10. {t("privacy_your_rights_gdpr")}
           </h2>
           <p>{t("privacy_rights_description")}:</p>
           <ul className="list-disc pl-6 mt-2 space-y-2">
@@ -190,7 +212,7 @@ export default function PrivacyPage() {
           <p className="mt-4">{t("privacy_rights_contact")}</p>
 
           <h2 className="text-2xl font-bold mt-8 mb-4">
-            9. {t("privacy_international_transfers")}
+            11. {t("privacy_international_transfers")}
           </h2>
           <p>{t("privacy_transfers_description")}</p>
           <p>{t("privacy_transfers_mechanisms")}:</p>
@@ -200,17 +222,17 @@ export default function PrivacyPage() {
           </ul>
 
           <h2 className="text-2xl font-bold mt-8 mb-4">
-            10. {t("privacy_security")}
+            12. {t("privacy_security")}
           </h2>
           <p>{t("privacy_security_description")}</p>
 
           <h2 className="text-2xl font-bold mt-8 mb-4">
-            11. {t("privacy_changes")}
+            13. {t("privacy_changes")}
           </h2>
           <p>{t("privacy_changes_description")}</p>
 
           <h2 className="text-2xl font-bold mt-8 mb-4">
-            12. {t("privacy_contact")}
+            14. {t("privacy_contact")}
           </h2>
           <p>{t("privacy_contact_description")}</p>
 

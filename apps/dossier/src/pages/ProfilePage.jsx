@@ -520,7 +520,7 @@ const ProfilePage = () => {
   }
 
   const profileContent = (
-    <div className="max-w-4xl mx-auto">
+    <div>
       {/* Header */}
       <div className="flex items-center justify-between mb-6 pb-4 border-b border-slate-300 dark:border-white/[0.06]">
         <h1 className="font-cinzel text-[19px] font-medium text-slate-950 dark:text-white/85 tracking-[0.04em]">
@@ -783,7 +783,7 @@ const ProfilePage = () => {
       error={userError}
       onCreatePost={handleCreatePost}
     >
-      <div className="py-2.5 px-0 lg:px-1">{profileContent}</div>
+      {profileContent}
     </Layout>
   );
 };

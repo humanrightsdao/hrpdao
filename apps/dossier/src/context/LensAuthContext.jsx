@@ -14,18 +14,13 @@ import {
 // WalletConnect connectAsync() dance. Privy itself decides HOW to get
 // the user a signer (embedded EOA via email/social/passkey, or an
 // externally linked wallet if they choose that in the login modal).
-// In theory @privy-io/wagmi's WagmiProvider auto-syncs whichever
-// wallet becomes active into wagmi's own state — in practice this
-// sync can lag or miss entirely right after a FRESH embedded wallet
-// is created (the account exists on Privy's side, its own "Success"
-// modal confirms that, but wagmi's useAccount()/isConnected never
-// flips true, so the app stays stuck on the login screen even though
-// Privy itself succeeded). Privy's own official demos handle this by
-// explicitly setting the active wallet via useSetActiveWallet() once
-// it appears in useWallets() — see the effect below — instead of
-// relying purely on the automatic sync.
+// Getting that wallet registered as wagmi's active connection is now
+// handled entirely by @privy-io/wagmi's own internal sync, driven by
+// the `setActiveWalletForWagmi` prop passed to its WagmiProvider in
+// main.jsx — see the comment on LensAuthProvider below for the full
+// history of why a manual sync effect used to live here and why it
+// was removed.
 import { usePrivy, useWallets } from "@privy-io/react-auth";
-import { useSetActiveWallet } from "@privy-io/wagmi";
 import {
   fetchAllModActions,
   computeBanState,
@@ -52,129 +47,69 @@ export function LensAuthProvider({ children }) {
   // wallet and @privy-io/wagmi syncs it into wagmi automatically, at
   // which point useAccount() above reflects the new address/connector
   // on its own without us calling wagmi's connect() at all.
+  //
+  // FIXED (root cause of both the Google-login "Wallet not connected"
+  // bug AND the later "No wagmi connector found for wallet ..."
+  // regression): this used to maintain its OWN "wallet-sync" useEffect
+  // here, manually watching Privy's useWallets() and calling
+  // @privy-io/wagmi's useSetActiveWallet() (and later, our own
+  // connectAsync()/switchAccountAsync() replacement) to hook the
+  // active wallet into wagmi.
+  //
+  // That was fighting @privy-io/wagmi's OWN internal sync
+  // (useSyncPrivyWallets, which runs unconditionally inside its
+  // WagmiProvider, below in main.jsx) for the exact same job — TWO
+  // separate effects, in two different components, both reacting to
+  // the same `wallets` change, each with its own async work
+  // (`wallet.getEthereumProvider()`, connector setup) with no
+  // ordering guarantee between them. "No wagmi connector found for
+  // wallet ... (io.privy.wallet.0x...)" was this effect's connector
+  // lookup running BEFORE @privy-io/wagmi's own internal
+  // setupConnectors() had finished registering that connector — a
+  // pure race, not a real missing connector.
+  //
+  // @privy-io/wagmi ships an official mechanism for exactly this —
+  // picking which Privy wallet should become wagmi's active
+  // connection — via the `setActiveWalletForWagmi` prop on its
+  // WagmiProvider (see main.jsx). Passing it makes the library's own
+  // internal effect do BOTH the connector setup AND the activation
+  // (setting connections/current/status directly), in one place, with
+  // no second effect to race against. useAccount() above simply
+  // reflects that once it's done — nothing else to write here.
   const { login, logout: privyLogout, ready: privyReady } = usePrivy();
-  // ADDED: explicit fallback for the wagmi sync gap described above.
-  // wallets is Privy's own list of connected wallets (embedded +
-  // any externally linked ones), independent of wagmi's state.
   const { wallets } = useWallets();
-  const { setActiveWallet } = useSetActiveWallet();
   const { disconnect } = useDisconnect();
-  // ADDED: guards the wallet-sync effect below against racing with
-  // logout() (see there). Between wagmi's disconnect() and Privy's
-  // own privyLogout() resolving, there's a real window where
-  // isConnected is already false but Privy's `wallets` list hasn't
-  // cleared yet — the sync effect, watching exactly that combination,
-  // would otherwise call setActiveWallet again and silently undo the
-  // disconnect mid-logout, which is what caused "Sign out" to hang
-  // forever.
+  // Still needed by logout() further down, to stop the wallet from
+  // being treated as "should reconnect" mid sign-out.
   const loggingOutRef = useRef(false);
+  // FIXED (Settings logout stuck on the loading spinner until a manual
+  // F5): disconnect()/privyLogout() inside logout() below tear the
+  // embedded wallet down ASYNCHRONOUSLY and can themselves fail (see
+  // the long comment inside logout() for the rpc.lens.xyz 403 case) —
+  // so wagmi's `isConnected` does not necessarily flip to false by the
+  // time SettingsPage's navigate("/") has already mounted App.jsx.
+  // App.jsx's own effects (`fetchAccounts()` when `isConnected &&
+  // !sessionClient`, then auto-login when exactly one account comes
+  // back) see the stale isConnected=true and immediately try to log
+  // the user straight back in with the very wallet logout() just tore
+  // down. loginWithAccount()'s signMessage() call then fails deep
+  // inside the SDK with "No embedded or connected wallet found for
+  // address" as a rejection nothing awaits/catches — so
+  // `await lensClient.login(...)` in loginWithAccount never settles,
+  // its `finally { setLoginLoading(false) }` never runs, and
+  // App.jsx's `if (loginLoading) return <Spinner />` spins forever.
+  // justLoggedOutRef is the same "suppress reactive re-triggers for a
+  // short grace window after an intentional logout" idiom already used
+  // for markIntentionalDisconnect below — App.jsx's effects check
+  // `.current` before calling fetchAccounts()/auto-login, so the stale
+  // isConnected blip during teardown can no longer start a doomed
+  // re-login.
+  const justLoggedOutRef = useRef(false);
   const { switchChain } = useSwitchChain();
   const [loginLoading, setLoginLoading] = useState(false);
   const [accounts, setAccounts] = useState(null);
   const [sessionClient, setSessionClient] = useState(null);
   const [sessionRestoring, setSessionRestoring] = useState(true);
-
-  // ADDED: closes the "Privy succeeded but wagmi never noticed" gap.
-  // Privy's own "Successfully connected" modal confirms auth + wallet
-  // creation happened on ITS side — but wagmi's useAccount().isConnected
-  // (which App.jsx's login screen and this whole context gate on) is a
-  // SEPARATE piece of state that @privy-io/wagmi is supposed to sync
-  // automatically, and in practice that sync can lag or silently miss
-  // right after a brand-new embedded wallet is created (the wallet
-  // doesn't exist in `wallets` yet at the exact moment Privy's modal
-  // resolves — it appears a beat later). Instead of waiting on the
-  // automatic sync, watch Privy's own `wallets` list directly and
-  // explicitly call setActiveWallet as soon as a wallet shows up that
-  // wagmi doesn't already know about — this is the pattern Privy's own
-  // official wagmi demos use for embedded wallets specifically.
-  // FIXED: this effect's guard only checked `isConnected` — but
-  // isConnected doesn't flip true the instant setActiveWallet() is
-  // called, it takes at least one more render cycle for wagmi to
-  // actually register the new active connector. In that window, ANY
-  // other change that touches this effect's dependencies (wallets
-  // identity, setActiveWallet identity, or React just re-rendering
-  // for an unrelated reason) re-ran the effect while isConnected was
-  // STILL false — and with no in-flight guard, it called
-  // setActiveWallet() a SECOND time for the exact same wallet before
-  // the first call had even resolved. Two concurrent calls to
-  // Privy's own connect() for the same wallet is exactly what
-  // produced the "wallet_requestPermissions already pending" errors
-  // (and the extra permission popup on every reload) — this was
-  // never about some OTHER, independent connection path; it was this
-  // effect racing against itself. syncInFlightRef closes that gap:
-  // once a setActiveWallet() call is in progress, any re-fire of this
-  // effect just skips instead of starting a second one.
-  const syncInFlightRef = useRef(false);
-
-  // FIXED (round 2 — confirmed via console trace): syncInFlightRef only
-  // protects against OVERLAPPING calls, i.e. a second setActiveWallet()
-  // starting before the first one has resolved. It does NOT protect
-  // against SEQUENTIAL redundant calls — and that's what was actually
-  // happening: setActiveWallet() would resolve OK, syncInFlightRef would
-  // reset to false, but wagmi's own isConnected takes a few more renders
-  // to actually flip true. In that window this effect re-fires (wallets
-  // identity change, or React just re-rendering), sees isConnected still
-  // false, and — since nothing was in flight anymore — happily starts a
-  // BRAND NEW setActiveWallet() call for the exact same wallet it had
-  // literally just finished connecting a moment earlier. Each of those
-  // is a real wallet_requestPermissions round-trip to MetaMask; several
-  // of them back-to-back is exactly what produced the repeated
-  // "already pending" RPC errors (and the connect prompt reappearing)
-  // on every page load. syncedAddressRef fixes this at the right level:
-  // once a given address has been successfully handed to
-  // setActiveWallet(), we don't ask again for THAT address, no matter
-  // how many more times this effect re-fires before wagmi's isConnected
-  // catches up. It only resets when the wallet list genuinely changes
-  // (logout, or the user switches accounts in the extension).
-  const syncedAddressRef = useRef(null);
-
-  useEffect(() => {
-    // DIAGNOSTIC LOGGING: unconditional, runs on every change of
-    // wallets/isConnected so we can see in the console exactly what
-    // Privy reports vs. what wagmi currently has, on every render of
-    // this effect — regardless of whether we end up calling
-    // setActiveWallet below.
-    console.log("🔎 [wallet-sync] effect fired:", {
-      walletsCount: wallets?.length ?? 0,
-      wallets: wallets?.map((w) => ({
-        address: w.address,
-        walletClientType: w.walletClientType,
-        connectorType: w.connectorType,
-      })),
-      isConnected,
-    });
-    if (!wallets?.length) {
-      syncedAddressRef.current = null; // nothing linked anymore — allow a fresh sync next time a wallet appears
-      return;
-    }
-    if (isConnected) return; // wagmi already has an active wallet — nothing to do
-    if (loggingOutRef.current) return; // logout in progress — don't reconnect mid-flow
-    if (syncInFlightRef.current) return; // a setActiveWallet() call is already in flight
-    // Prefer the embedded wallet (walletClientType === "privy") if one
-    // exists — that's the one users created via email/Google/passkey.
-    // Fall back to whichever wallet Privy reports first (e.g. a linked
-    // external wallet) if there's no embedded one.
-    const target =
-      wallets.find((w) => w.walletClientType === "privy") || wallets[0];
-    if (!target) return;
-    if (syncedAddressRef.current === target.address) return; // already asked MetaMask to reconnect THIS address — just waiting for wagmi's own state to catch up, not a reason to ask again
-    console.log("🔎 [wallet-sync] calling setActiveWallet with:", {
-      address: target.address,
-      walletClientType: target.walletClientType,
-    });
-    syncInFlightRef.current = true;
-    setActiveWallet(target)
-      .then(() => {
-        syncedAddressRef.current = target.address;
-        console.log("✅ [wallet-sync] setActiveWallet resolved OK");
-      })
-      .catch((err) => {
-        console.warn("⚠️ [wallet-sync] setActiveWallet failed:", err);
-      })
-      .finally(() => {
-        syncInFlightRef.current = false;
-      });
-  }, [wallets, isConnected, setActiveWallet]);
 
   // ADDED: a root-level ban gate (moderationActions.js). Previously the
   // "is banned" check was duplicated in every component separately
@@ -288,6 +223,32 @@ export function LensAuthProvider({ children }) {
         }
 
         setSessionClient(resumed.value);
+
+        // FIXED: a restored session used to leave `accounts` at its
+        // initial value (null) — the exact same value
+        // loginAsOnboardingUser() deliberately sets to mean "this
+        // session has no account yet, go create one" (see its comment
+        // above). App.jsx's routing effect can't tell these two "null"
+        // cases apart, so every returning user with a real account was
+        // sent to /create-lens-account on a fresh page load — that page
+        // then ran its OWN "one wallet — one account" check, found the
+        // existing account, and showed the "Перейти до акаунту" screen
+        // instead of the create-account form. One extra click, on every
+        // single visit, for every user who already has an account.
+        // getAuthenticatedUser() reads this straight off the session's
+        // own JWT — no network round trip — so it's safe to call right
+        // here: if it resolves to an account address, this is a real
+        // accountOwner session and App.jsx can route straight to
+        // /country. `accounts` is only left as [] (genuinely "no
+        // account yet") for a resumed onboardingUser session, which is
+        // the one case that legitimately belongs on /create-lens-account.
+        const authedUser = resumed.value.getAuthenticatedUser();
+        if (authedUser.isOk() && authedUser.value?.address) {
+          setAccounts([{ address: authedUser.value.address }]);
+        } else {
+          setAccounts([]);
+        }
+
         console.log("✅ Lens session restored from storage");
       } catch (err) {
         if (!cancelled) {
@@ -362,7 +323,8 @@ export function LensAuthProvider({ children }) {
 
   const ensureCorrectNetwork = async () => {
     try {
-      await switchChain({ chainId: 37111 });
+      // MIGRATED to Lens Mainnet (chainId 232).
+      await switchChain({ chainId: 232 });
       await new Promise((res) => setTimeout(res, 1000));
     } catch (e) {
       // Chain unknown — add it manually
@@ -389,21 +351,22 @@ export function LensAuthProvider({ children }) {
             method: "wallet_addEthereumChain",
             params: [
               {
-                chainId: "0x90F7", // 37111 in hex
-                chainName: "Lens Network Sepolia Testnet",
+                // MIGRATED to Lens Mainnet.
+                chainId: "0xE8", // 232 in hex
+                chainName: "Lens Network Mainnet",
                 nativeCurrency: {
-                  name: "GRASS",
-                  symbol: "GRASS",
+                  name: "Grass",
+                  symbol: "GHO",
                   decimals: 18,
                 },
-                rpcUrls: ["https://rpc.testnet.lens.dev"],
-                blockExplorerUrls: ["https://block-explorer.testnet.lens.dev"],
+                rpcUrls: ["https://rpc.lens.xyz"],
+                blockExplorerUrls: ["https://explorer.lens.xyz"],
               },
             ],
           });
           // After adding — switch
           await new Promise((res) => setTimeout(res, 1000));
-          await switchChain({ chainId: 37111 });
+          await switchChain({ chainId: 232 });
           await new Promise((res) => setTimeout(res, 1000));
         } catch (addError) {
           console.log("Add chain error:", addError);
@@ -434,9 +397,9 @@ export function LensAuthProvider({ children }) {
   // that gap regardless of which page the user was on right before.
   const getWalletClient = async () => {
     let client = walletClientRef.current;
-    if (!client || client.chain?.id !== 37111) {
+    if (!client || client.chain?.id !== 232) {
       await ensureCorrectNetwork();
-      client = await waitForWalletClient(5000, 37111);
+      client = await waitForWalletClient(5000, 232);
     }
     return client;
   };
@@ -544,8 +507,35 @@ export function LensAuthProvider({ children }) {
     // (Navbar, etc.) would treat as a reason to hard-reload the page
     // mid-logout.
     markIntentionalDisconnect(true);
+    // See the comment on justLoggedOutRef's declaration above: this
+    // blocks App.jsx's fetchAccounts()/auto-login effects from racing
+    // back in with the wallet mid-teardown.
+    justLoggedOutRef.current = true;
     try {
-      if (sessionClient) await sessionClient.logout();
+      // FIXED (infinite spinner after clicking "Log out" in Settings):
+      // sessionClient.logout() revokes the session on Lens's own
+      // backend (an actual network call to rpc.lens.xyz) — and it can
+      // fail (403, timeout, offline), exactly like any other network
+      // call. It used to be the ONLY step in this function without its
+      // own try/catch, so a failed revocation threw straight out of
+      // this whole try block and skipped setSessionClient(null) /
+      // setAccounts(null) below it entirely. SettingsPage.handleLogout
+      // still caught the rethrown error and navigated to "/" as if
+      // logout had succeeded — but App.jsx's root route does
+      // `if (sessionClient) return <Spinner />`, and with
+      // sessionClient stuck at its old (truthy) value forever, that
+      // spinner never went away. Local state must always be cleared
+      // regardless of whether the remote revocation call itself
+      // succeeded — same reasoning as disconnect()/privyLogout() just
+      // below, which were already isolated this way.
+      try {
+        if (sessionClient) await sessionClient.logout();
+      } catch (err) {
+        console.warn(
+          "⚠️ Lens sessionClient.logout() error (continuing local logout anyway):",
+          err.message,
+        );
+      }
       setSessionClient(null);
       setAccounts(null);
 
@@ -589,6 +579,13 @@ export function LensAuthProvider({ children }) {
       // close — same failure this whole fix is for, just moved a
       // few hundred ms later.
       setTimeout(() => markIntentionalDisconnect(false), 1500);
+      // Same grace window as markIntentionalDisconnect above, same
+      // reason: isConnected can still report stale/true for a beat
+      // after privyLogout() has resolved, since the actual wallet
+      // teardown finishes asynchronously on the provider's own side.
+      setTimeout(() => {
+        justLoggedOutRef.current = false;
+      }, 1500);
     }
   };
 
@@ -699,6 +696,11 @@ export function LensAuthProvider({ children }) {
     loginWithAccount,
     loginAsOnboardingUser,
     logout,
+    // See the comment on its declaration above: App.jsx's
+    // fetchAccounts()/auto-login effects check `.current` to avoid
+    // racing a fresh login attempt back in with a wallet that
+    // logout() just started tearing down.
+    justLoggedOutRef,
     anonymizeAccountMetadata,
     setExternalSessionClient,
     getWalletClient,

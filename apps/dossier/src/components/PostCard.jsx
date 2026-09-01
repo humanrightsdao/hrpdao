@@ -20,7 +20,13 @@
 // expanded, the comment draft text, whether the share modal is shown)
 // are kept INSIDE PostCard itself — the parent component doesn't need to
 // know about them.
-import React, { useState, useRef, useEffect, useCallback } from "react";
+import React, {
+  useState,
+  useRef,
+  useEffect,
+  useLayoutEffect,
+  useCallback,
+} from "react";
 import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";
 import EmojiPicker, { Theme as EmojiTheme } from "emoji-picker-react";
@@ -364,6 +370,20 @@ const PostCard = ({
   const [quickFileError, setQuickFileError] = useState("");
   const [showQuickEmojiPicker, setShowQuickEmojiPicker] = useState(false);
   const [quickEmojiPickerStyle, setQuickEmojiPickerStyle] = useState(null);
+
+  // FIXED: "Читати повністю" used to be shown/hidden based on a static
+  // char/newline-count heuristic (POST_PREVIEW_CHAR_LIMIT /
+  // POST_PREVIEW_LINE_LIMIT), independent of the actual card width and
+  // font metrics. A post could cross the character threshold yet still
+  // wrap to fewer than POST_PREVIEW_LINE_LIMIT visual lines at the card's
+  // real width — the CSS line-clamp then had nothing to clamp, the full
+  // text was already visible, but the button still appeared, misleading
+  // users into thinking text was cut off. isTextClamped instead measures
+  // the actual rendered element: the clamp box is only "active" (and the
+  // button only shown) when its content is genuinely taller than the
+  // clamped box (scrollHeight > clientHeight).
+  const [isTextClamped, setIsTextClamped] = useState(false);
+  const contentTextRef = useRef(null);
   const quickFileInputRef = useRef(null);
   const quickInputRef = useRef(null);
   const quickEmojiPickerRef = useRef(null);
@@ -532,17 +552,51 @@ const PostCard = ({
 
   const media = post.media || [];
 
-  // ADDED: decide once per render whether this post's TEXT should be
-  // shown clamped (with a "Дивитись повністю" button) or in full — by
-  // character count and by line count, see POST_PREVIEW_* above. Always
-  // false when disablePreview is set (PostPage — the card already IS the
-  // full post there).
+  // CHANGED: POST_PREVIEW_CHAR_LIMIT/POST_PREVIEW_LINE_LIMIT are now only
+  // a cheap pre-check — "could this possibly need clamping" — not the
+  // final answer on whether to show "Читати повністю". They avoid running
+  // the line-clamp style (and its layout effect) on posts that are
+  // obviously short. Whether the button actually renders is decided by
+  // isTextClamped below, which measures the real rendered box.
   const contentText = post.content || "";
   const contentLineCount = contentText.split("\n").length;
-  const isLongContent =
+  const mayNeedClamp =
     !disablePreview &&
     (contentText.length > POST_PREVIEW_CHAR_LIMIT ||
       contentLineCount > POST_PREVIEW_LINE_LIMIT);
+
+  // FIXED: measure the actual rendered <p> after every layout that could
+  // change wrapping (new content, media loading/resizing nearby, window
+  // resize) and only report the text as clamped when its full content is
+  // genuinely taller than the clamped box. This replaces the old
+  // heuristic-only decision so "Читати повністю" never appears next to
+  // text that is already shown in full.
+  useLayoutEffect(() => {
+    if (!mayNeedClamp) {
+      setIsTextClamped(false);
+      return;
+    }
+    const el = contentTextRef.current;
+    if (!el) return;
+
+    const measure = () => {
+      setIsTextClamped(el.scrollHeight - el.clientHeight > 1);
+    };
+    measure();
+
+    const resizeObserver =
+      typeof ResizeObserver !== "undefined"
+        ? new ResizeObserver(measure)
+        : null;
+    resizeObserver?.observe(el);
+    window.addEventListener("resize", measure);
+    return () => {
+      resizeObserver?.disconnect();
+      window.removeEventListener("resize", measure);
+    };
+  }, [mayNeedClamp, contentText]);
+
+  const isLongContent = mayNeedClamp && isTextClamped;
 
   // ADDED: cap how many MEDIA items the card renders — the rest collapse
   // behind a "+N more" control that, like the text's "Дивитись повністю",
@@ -743,17 +797,23 @@ const PostCard = ({
             </div>
           </div>
 
-          {/* Post text — CHANGED: long posts are now clamped to
-              POST_PREVIEW_LINE_LIMIT lines (via -webkit-line-clamp, set
-              inline rather than a Tailwind utility class so it doesn't
-              depend on the line-clamp plugin being enabled) whenever the
-              text also crosses POST_PREVIEW_CHAR_LIMIT or the line cap.
-              Short posts render exactly as before — no clamp, no button. */}
+          {/* Post text — clamped to POST_PREVIEW_LINE_LIMIT lines (via
+              -webkit-line-clamp, set inline rather than a Tailwind utility
+              class so it doesn't depend on the line-clamp plugin being
+              enabled) whenever the text crosses POST_PREVIEW_CHAR_LIMIT or
+              the line cap. FIXED: the "Читати повністю" button used to
+              follow that same static check, so it could appear even when
+              the text actually fit and rendered in full at the card's real
+              width. It now only shows when isTextClamped confirms the
+              rendered box is actually cut off (see the useLayoutEffect
+              above) — never next to fully-visible text. Short posts render
+              exactly as before — no clamp, no button. */}
           <div className="px-4 py-2.5">
             <p
+              ref={contentTextRef}
               className="text-[16px] text-slate-950 dark:text-white/85 leading-relaxed whitespace-pre-wrap"
               style={
-                isLongContent
+                mayNeedClamp
                   ? {
                       display: "-webkit-box",
                       WebkitLineClamp: POST_PREVIEW_LINE_LIMIT,

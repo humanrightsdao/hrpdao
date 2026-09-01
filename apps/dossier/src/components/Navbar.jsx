@@ -35,7 +35,7 @@ function ipfsUriToGatewayLink(ipfsUri) {
 // "palette" = Variant B — icon opens a ⌘K-style command palette modal (future)
 const SEARCH_MODE = "inline";
 
-const Navbar = () => {
+const Navbar = ({ visible = true }) => {
   const { t, i18n } = useTranslation();
   const location = useLocation();
   const navigate = useNavigate();
@@ -174,7 +174,11 @@ const Navbar = () => {
   // Tooltip text for user stats
   return (
     <>
-      <nav className="sticky top-0 z-50 bg-white dark:bg-[#00091c] border-b border-slate-200 dark:border-white/[0.06] transition-colors duration-200">
+      <nav
+        className={`sticky top-0 z-50 bg-white dark:bg-[#00091c] border-b border-slate-200 dark:border-white/[0.06] transition-all duration-300 ease-in-out lg:translate-y-0 ${
+          visible ? "translate-y-0" : "-translate-y-full"
+        }`}
+      >
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-16">
             {/* Left part: Logo and name */}

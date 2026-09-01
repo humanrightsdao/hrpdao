@@ -138,9 +138,20 @@ const mapPostToFeedItem = (post) => {
     },
     stats: {
       upvotes: post.stats?.upvotes ?? 0,
+      downvotes: post.stats?.downvotes ?? 0,
       comments: post.stats?.comments ?? 0,
       reposts: post.stats?.reposts ?? 0,
       collects: post.stats?.collects ?? 0,
+    },
+    // ADDED: same fix as normalizeLensPost (useLensPosts.js) — the real,
+    // authoritative reaction state for the logged-in user, straight from
+    // Lens's LoggedInPostOperations. Previously not exposed here at all,
+    // which is why FollowingPage.jsx's getMyReaction()/getReactionCounts()
+    // had nothing to read except localStorage — see the fix there for why
+    // that caused "Правда" to duplicate onto "Неправда".
+    operations: {
+      hasUpvoted: post.operations?.hasUpvoted ?? false,
+      hasDownvoted: post.operations?.hasDownvoted ?? false,
     },
   };
 };

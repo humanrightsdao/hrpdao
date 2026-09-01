@@ -554,7 +554,7 @@ const HelpRequestPage = () => {
       )}
 
       {!showCreatePostModal && (
-        <div className="w-full py-4 px-0 lg:px-3">
+        <div className="w-full">
           {/* Back navigation — structurally consistent with ComplaintDetailsPage */}
           <div className="mb-4 pb-4 border-b border-slate-300 dark:border-white/[0.06] flex items-center justify-between">
             <button

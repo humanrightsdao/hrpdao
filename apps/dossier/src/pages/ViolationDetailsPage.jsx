@@ -376,7 +376,7 @@ const ViolationDetailsPage = () => {
 
       {/* Main page - only shown if create post modal is not open */}
       {!showCreatePostModal && (
-        <div className="w-full py-4 px-0 lg:px-3">
+        <div className="w-full">
           {/* Back navigation and map link */}
           <div className="mb-4 pb-4 border-b border-slate-300 dark:border-white/[0.06] flex items-center justify-between">
             <Link

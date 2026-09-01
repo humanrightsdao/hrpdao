@@ -1,5 +1,5 @@
 // src/pages/FollowingPage.jsx
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { useWalletClient } from "wagmi";
@@ -97,6 +97,7 @@ const FollowingPage = () => {
     repostLensPost,
     addLensReaction,
     removeLensReaction,
+    getLensPost,
   } = useLensPosts(sessionClient, getWalletClient);
 
   const [activeTab, setActiveTab] = useState("following");
@@ -259,6 +260,17 @@ const FollowingPage = () => {
   const [savedStatuses, setSavedStatuses] = useState({});
   const [savingPosts, setSavingPosts] = useState({});
   const [reactionOverrides, setReactionOverrides] = useState({});
+  // ADDED: guards handleReaction() against double-clicks while an API
+  // round-trip is in flight (same fix as CountryFeed.jsx/PostPage.jsx).
+  const [reactingPostIds, setReactingPostIds] = useState(new Set());
+  // FIXED: reactingPostIds above is React state — setReactingPostIds()
+  // is async/batched, so two clicks landing in the same tick can both
+  // read the old Set before either update lands, letting both through
+  // to fire the Lens mutation concurrently. reactingPostIdsRef is a
+  // plain mutable Set checked AND marked in the same synchronous
+  // statement, closing that window; the state copy above is kept only
+  // in case the UI wants to read it later.
+  const reactingPostIdsRef = useRef(new Set());
   const [commentCountDeltas, setCommentCountDeltas] = useState({});
   const [deletedPostIds, setDeletedPostIds] = useState(new Set());
 
@@ -314,12 +326,8 @@ const FollowingPage = () => {
     const override = reactionOverrides[post.id];
     if (override) return { truth: override.truth, false: override.false };
 
-    let truth = post.stats?.upvotes ?? post.truth_count ?? 0;
-    let falseCount = post.stats?.downvotes ?? post.false_count ?? 0;
-
-    const stored = localStorage.getItem(`lens_reaction_${post.id}`);
-    if (stored === "truth" && truth === 0) truth = 1;
-    if (stored === "false" && falseCount === 0) falseCount = 1;
+    const truth = post.stats?.upvotes ?? post.truth_count ?? 0;
+    const falseCount = post.stats?.downvotes ?? post.false_count ?? 0;
 
     return { truth, false: falseCount };
   };
@@ -327,7 +335,9 @@ const FollowingPage = () => {
   const getMyReaction = (post) => {
     const override = reactionOverrides[post.id];
     if (override) return override.my_reaction;
-    return localStorage.getItem(`lens_reaction_${post.id}`) || null;
+    if (post.operations?.hasUpvoted) return "truth";
+    if (post.operations?.hasDownvoted) return "false";
+    return null;
   };
 
   // --- Post actions (reactions, comments, saving, reposting, deleting) ---
@@ -340,74 +350,72 @@ const FollowingPage = () => {
       alert(t("login_to_react") || "Please log in to react");
       return;
     }
+    if (reactingPostIdsRef.current.has(post.id)) return; // already in flight
 
     const lensPostId = post.id;
+    // FIXED (root cause of "Правда" duplicating onto "Неправда"): same
+    // fix as CountryFeed.jsx/PostPage.jsx — no local +1/-1 counter math
+    // and no localStorage anywhere in this flow. Lens is asked based on
+    // the post's current reaction (from Lens's own
+    // operations.hasUpvoted/hasDownvoted), and once the call succeeds
+    // the post is refetched from Lens; reactionOverrides now holds that
+    // real, server-confirmed state — never a locally computed guess.
     const prevReaction = getMyReaction(post);
     const isTogglingOff = prevReaction === reactionType;
-    const nextReaction = isTogglingOff ? null : reactionType;
     const oppositeType = reactionType === "truth" ? "false" : "truth";
 
-    const baseCounts = getReactionCounts(post);
-    const computeNext = (reaction) => {
-      let truth = baseCounts.truth;
-      let falseCount = baseCounts.false;
-      if (prevReaction === "truth") truth = Math.max(0, truth - 1);
-      if (prevReaction === "false") falseCount = Math.max(0, falseCount - 1);
-      if (reaction === "truth") truth += 1;
-      if (reaction === "false") falseCount += 1;
-      return { truth, false: falseCount, my_reaction: reaction };
-    };
-
-    setReactionOverrides((prev) => ({
-      ...prev,
-      [post.id]: computeNext(nextReaction),
-    }));
+    // FIXED: marking the ref synchronously (not just the state Set via
+    // setReactingPostIds below) is what actually closes the race — see
+    // the comment on reactingPostIdsRef above.
+    reactingPostIdsRef.current.add(post.id);
+    setReactingPostIds((prev) => new Set(prev).add(post.id));
 
     try {
-      // Fixed: only clean up the opposite reaction on an actual switch
-      // (the same fix as in CountryFeed.jsx).
-      if (prevReaction === oppositeType) {
-        const cleanupResult = await removeLensReaction(
-          lensPostId,
-          oppositeType,
-        );
-        if (!cleanupResult.success) {
-          console.warn(
-            "⚠️ Defensive cleanup of the opposite reaction failed:",
-            cleanupResult.error,
-          );
-        }
-      }
-
-      const result = isTogglingOff
-        ? await removeLensReaction(lensPostId, reactionType)
-        : await addLensReaction(lensPostId, reactionType);
-
-      if (!result.success) {
-        throw new Error(
-          result.error ||
-            t("reaction_save_error") ||
-            "Failed to save reaction",
-        );
-      }
-
-      const storageKey = `lens_reaction_${lensPostId}`;
-      if (nextReaction) {
-        localStorage.setItem(storageKey, nextReaction);
+      if (isTogglingOff) {
+        const result = await removeLensReaction(lensPostId, reactionType);
+        if (!result.success) throw new Error(result.error);
       } else {
-        localStorage.removeItem(storageKey);
+        if (prevReaction === oppositeType) {
+          const cleanupResult = await removeLensReaction(
+            lensPostId,
+            oppositeType,
+          );
+          if (!cleanupResult.success) {
+            console.warn(
+              "⚠️ Failed to clear the opposite reaction:",
+              cleanupResult.error,
+            );
+          }
+        }
+        const result = await addLensReaction(lensPostId, reactionType);
+        if (!result.success) throw new Error(result.error);
+      }
+
+      const fresh = await getLensPost(lensPostId);
+      if (fresh.success) {
+        setReactionOverrides((prev) => ({
+          ...prev,
+          [post.id]: {
+            truth: fresh.post.truth_count,
+            false: fresh.post.false_count,
+            my_reaction: fresh.post.my_reaction,
+          },
+        }));
       }
     } catch (err) {
       console.error("❌ Error handling reaction:", err);
-      setReactionOverrides((prev) => ({
-        ...prev,
-        [post.id]: computeNext(prevReaction),
-      }));
       alert(
         (t("reaction_save_error") || "Failed to save reaction") +
           ": " +
           err.message,
       );
+    } finally {
+      reactingPostIdsRef.current.delete(post.id);
+      setReactingPostIds((prev) => {
+        const next = new Set(prev);
+        next.delete(post.id);
+        return next;
+      });
     }
   };
 
@@ -545,7 +553,7 @@ const FollowingPage = () => {
       error={userError}
       onCreatePost={() => {}}
     >
-      <div className="py-2 px-0 lg:px-1">
+      <div>
         <button
           onClick={() => navigate(-1)}
           className="flex items-center gap-1.5 text-[16px] text-slate-600 dark:text-white/40

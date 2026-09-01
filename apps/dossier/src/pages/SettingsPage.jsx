@@ -257,9 +257,6 @@ export default function SettingsPage() {
       localStorage.removeItem("web3_signature");
       localStorage.removeItem("web3_message");
       localStorage.removeItem("lens_account_address");
-      Object.keys(localStorage)
-        .filter((k) => k.startsWith("lens_reaction_"))
-        .forEach((k) => localStorage.removeItem(k));
 
       setShowDeleteConfirm(false);
       navigate("/");
@@ -427,7 +424,7 @@ export default function SettingsPage() {
         />
       )}
 
-      <div className="max-w-4xl mx-auto px-0 lg:px-2">
+      <div>
         {/* Page title */}
         <div className="mb-6 pb-4 border-b border-slate-300 dark:border-white/[0.06]">
           <h1 className="font-cinzel text-[19px] font-medium text-slate-950 dark:text-white/85 tracking-[0.04em]">

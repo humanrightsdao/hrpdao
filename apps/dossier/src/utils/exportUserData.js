@@ -243,33 +243,18 @@ async function fetchAllFollowing(client, accountAddress, onPage) {
   return results;
 }
 
-// ── Reactions — hybrid: on-chain (from already-loaded posts) + localStorage ──
+// ── Reactions — from already-loaded posts/comments/reports ───────────────────
 // Lens's API doesn't provide a complete on-chain source of "all of this
 // user's reactions" (there's no reverse index "posts account X reacted
-// to" — only an operations field on a SPECIFIC post). So:
-//   - onChainReactions covers reactions on posts/comments/reports that
-//     already ended up in this export (source of truth for those);
-//   - localStorage remains a fallback for the rest (reactions on other
-//     people's posts in the feed that weren't loaded here) — but that
-//     data belongs ONLY to this browser/device, so it will be missing on
-//     a new device.
-// The correct long-term solution is to write the reaction to our own DB
-// at the moment of addLensReaction/removeLensReaction (useLensPosts.js),
-// rather than relying on localStorage or a partial on-chain query.
+// to" — only an operations field on a SPECIFIC post), so this only
+// covers reactions on posts/comments/reports that already ended up in
+// this export. Reactions on other people's posts elsewhere in the feed
+// that weren't loaded here won't appear.
 function collectReactions(onChainReactions) {
-  const localReactions = Object.keys(localStorage)
-    .filter((k) => k.startsWith("lens_reaction_"))
-    .map((k) => [k.replace("lens_reaction_", ""), localStorage.getItem(k)]);
-
-  const merged = new Map(localReactions);
-  // On-chain data takes priority over localStorage where available
-  // (localStorage may be stale if the reaction was changed from another device).
-  onChainReactions.forEach((reaction, postId) => merged.set(postId, reaction));
-
-  return Array.from(merged.entries()).map(([postId, reaction]) => ({
+  return Array.from(onChainReactions.entries()).map(([postId, reaction]) => ({
     postId,
     reaction,
-    source: onChainReactions.has(postId) ? "onchain" : "local",
+    source: "onchain",
   }));
 }
 

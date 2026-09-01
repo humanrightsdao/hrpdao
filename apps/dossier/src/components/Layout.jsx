@@ -43,6 +43,8 @@ export default function Layout({
   const [isMobileRightMenuOpen, setIsMobileRightMenuOpen] = useState(false);
   const [isWalletConnected, setIsWalletConnected] = useState(false);
   const [isMobileMenuExpanded, setIsMobileMenuExpanded] = useState(false);
+  const [showMobileNav, setShowMobileNav] = useState(true);
+  const lastScrollYRef = useRef(0);
   const [screenWidth, setScreenWidth] = useState(
     typeof window !== "undefined" ? window.innerWidth : 1024,
   );
@@ -107,6 +109,32 @@ export default function Layout({
     if (walletAddr) {
       setIsWalletConnected(true);
     }
+  }, []);
+
+  // Hide mobile top/bottom bars on scroll-down, reveal on scroll-up (mobile only)
+  useEffect(() => {
+    const content = contentRef.current;
+    if (!content) return;
+
+    const handleScroll = () => {
+      const currentY = content.scrollTop;
+      const lastY = lastScrollYRef.current;
+      const delta = currentY - lastY;
+
+      if (currentY < 40) {
+        // Always show near the very top of the feed
+        setShowMobileNav(true);
+      } else if (Math.abs(delta) > 6) {
+        // Scrolling down -> hide, scrolling up -> show
+        setShowMobileNav(delta < 0);
+        if (delta > 0) setIsMobileMenuExpanded(false);
+      }
+
+      lastScrollYRef.current = currentY;
+    };
+
+    content.addEventListener("scroll", handleScroll, { passive: true });
+    return () => content.removeEventListener("scroll", handleScroll);
   }, []);
 
   // Track screen size change
@@ -364,7 +392,7 @@ export default function Layout({
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-indigo-100 dark:from-gray-900 dark:to-gray-800">
       {/* Navbar — renders responsively for both mobile and desktop */}
-      <Navbar />
+      <Navbar visible={showMobileNav} />
 
 
       {/* Container */}
@@ -447,7 +475,11 @@ export default function Layout({
       </div>
 
       {/* Mobile bottom menu - ОДНАКОВІ РОЗМІРИ НА ВСІХ ЕКРАНАХ */}
-      <div className="lg:hidden fixed bottom-0 left-0 right-0 z-50 bg-white dark:bg-[#00091c] backdrop-blur-md border-t border-gray-200 dark:border-white/[0.06]">
+      <div
+        className={`lg:hidden fixed bottom-0 left-0 right-0 z-50 bg-white dark:bg-[#00091c] backdrop-blur-md border-t border-gray-200 dark:border-white/[0.06] transition-transform duration-300 ease-in-out ${
+          showMobileNav ? "translate-y-0" : "translate-y-full"
+        }`}
+      >
         <div className="px-1 py-1.5">
           <div className="flex justify-around items-center">
             {visibleItems.map((item) => {
@@ -473,7 +505,7 @@ export default function Layout({
                     {item.icon}
                   </div>
                   <span
-                    className={`text-[10px] max-w-[50px] truncate text-center mt-0.5 ${
+                    className={`text-[10px] max-w-[68px] truncate text-center mt-0.5 ${
                       isCreateButton ? "font-medium" : ""
                     }`}
                   >
@@ -493,7 +525,7 @@ export default function Layout({
                 }`}
               >
                 <MoreVertical className="w-5 h-5" />
-                <span className="text-[10px] max-w-[50px] truncate text-center mt-0.5">
+                <span className="text-[10px] max-w-[68px] truncate text-center mt-0.5">
                   {t("more") || "More"}
                 </span>
               </button>
@@ -502,7 +534,7 @@ export default function Layout({
 
           {isMobileMenuExpanded && hiddenItems.length > 0 && (
             <div className="mt-1.5 pt-1.5 border-t border-gray-200 dark:border-white/[0.08] animate-slideUp">
-              <div className="flex flex-wrap justify-center gap-1.5">
+              <div className="flex flex-wrap justify-around items-center gap-1.5">
                 {hiddenItems.map((item) => {
                   const isActive =
                     item.type === "right"
@@ -513,14 +545,16 @@ export default function Layout({
                     <button
                       key={item.key}
                       onClick={() => handleMobileMenuItemClick(item)}
-                      className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg transition-all text-xs ${
+                      className={`flex flex-col items-center p-1.5 rounded-lg transition-all relative ${
                         isActive
                           ? "text-[#8B1A2A] bg-[#8B1A2A]/10 border border-[#8B1A2A]/30 dark:text-[#e8a0b0] dark:bg-[#2B000A] dark:border-[#2B000A]/50"
-                          : "text-gray-500 dark:text-white/50 hover:text-gray-800 dark:hover:text-white/80 hover:bg-gray-100 dark:hover:bg-white/[0.06]"
+                          : "text-gray-500 dark:text-white/50 hover:text-gray-800 dark:hover:text-white/80"
                       }`}
                     >
                       <div className="w-5 h-5">{item.icon}</div>
-                      <span className="whitespace-nowrap">{item.label}</span>
+                      <span className="text-[10px] max-w-[68px] truncate text-center mt-0.5">
+                        {item.label}
+                      </span>
                     </button>
                   );
                 })}

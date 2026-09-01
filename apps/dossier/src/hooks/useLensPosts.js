@@ -17,6 +17,7 @@ import { eip712WalletActions } from "viem/zksync";
 // користувач бачить [HRDAO_REPORT]{...} замість людського тексту.
 import { isReportComment } from "../utils/postReports";
 import { isModActionComment } from "../utils/moderationActions";
+import { sanitizeCount } from "../utils/sanitizeCount";
 import {
   post,
   fetchPosts,
@@ -193,23 +194,24 @@ const buildContentMetadata = async ({
 // resolves correctly for the embedded wallet, a linked external wallet,
 // or WalletConnect alike).
 const getViemWalletClient = async (externalWalletClient) => {
-  const lensTestnetChain = chains.testnet;
+  // MIGRATED to Lens Mainnet.
+  const lensChain = chains.mainnet;
 
   if (!externalWalletClient) {
     throw new Error("Wallet not connected");
   }
 
-  // Make sure we're on the Lens testnet chain. switchChain is one of
+  // Make sure we're on the Lens mainnet chain. switchChain is one of
   // viem's default wallet actions, included automatically on any
   // WalletClient created by wagmi — it works through whichever
   // provider is actually connected (embedded wallet, linked external
   // wallet, or WalletConnect session).
-  if (externalWalletClient.chain?.id !== lensTestnetChain.id) {
+  if (externalWalletClient.chain?.id !== lensChain.id) {
     try {
-      await externalWalletClient.switchChain({ id: lensTestnetChain.id });
+      await externalWalletClient.switchChain({ id: lensChain.id });
     } catch (err) {
       throw new Error(
-        "Please switch your wallet's network to Lens Testnet and try again.",
+        "Please switch your wallet's network to Lens Mainnet and try again.",
       );
     }
   }
@@ -255,6 +257,24 @@ const NON_FEED_TAGS = ["violation", "help_request", RATING_TAG, "mod_action"];
 
 const isNonFeedPost = (item) =>
   (item.metadata?.tags || []).some((tag) => NON_FEED_TAGS.includes(tag));
+
+// FIX: fetchPosts() returns AnyPost = Post | Repost — a Repost has NO
+// metadata/stats/commentOn/operations of its own (only `repostOf`,
+// pointing at the original Post, plus its own id/timestamp for when
+// the repost happened). Every call site below treated every item as
+// a Post, so a Repost sailed through both rootPostsOnly (no
+// `commentOn` field → passes the "not a comment" check) and
+// isNonFeedPost (no `metadata` → no tags → passes the "not
+// violation/rating/etc" check), then normalizeLensPost read its
+// absent `metadata.content` as "". The result: reposting someone
+// else's post ("Поділитись") silently added a content-less phantom
+// "post" — authored by you, timestamped to when you reposted — to
+// getUserPosts() (Profile → "Мої пости"), since that query filters
+// only by `authors` and a Repost's `author` is whoever reposted it.
+// getPosts() (country feed) never showed this because it filters by
+// `metadata.tags`, which a Repost doesn't have — so it was silently
+// dropped there, making the phantom entries look Profile-page-only.
+const isRepost = (item) => item.__typename === "Repost";
 
 /**
  * Нормалізує пост з Lens API до формату
@@ -326,11 +346,18 @@ export const normalizeLensPost = (lensPost) => {
       owner_address: ownerAddress, // ← НОВЕ ПОЛЕ
     },
 
+    // ФІКС: sanitizeCount() захищає від пошкоджених значень з Lens
+    // API/індексатора — див. utils/sanitizeCount.js для повної історії.
+    truth_count: sanitizeCount(lensPost.stats?.upvotes),
+    false_count: sanitizeCount(lensPost.stats?.downvotes),
     reactions_count:
-      (lensPost.stats?.upvotes || 0) + (lensPost.stats?.downvotes || 0),
-    truth_count: lensPost.stats?.upvotes || 0,
-    false_count: lensPost.stats?.downvotes || 0,
-    my_reaction: localStorage.getItem(`lens_reaction_${lensPost.id}`) || null,
+      sanitizeCount(lensPost.stats?.upvotes) +
+      sanitizeCount(lensPost.stats?.downvotes),
+    my_reaction: lensPost.operations?.hasUpvoted
+      ? "truth"
+      : lensPost.operations?.hasDownvoted
+        ? "false"
+        : null,
     comments_count: lensPost.stats?.comments || 0,
     reposts_count: lensPost.stats?.reposts || 0,
     bookmarks_count: lensPost.stats?.bookmarks || 0,
@@ -526,7 +553,8 @@ export async function fetchPostsByAuthor(accountAddress, cursor = null) {
     }
 
     const { items, pageInfo } = result.value;
-    const rootPostsOnly = items.filter((item) => !item.commentOn);
+    const postsOnly = items.filter((item) => !isRepost(item));
+    const rootPostsOnly = postsOnly.filter((item) => !item.commentOn);
     const generalPostsOnly = rootPostsOnly.filter(
       (item) => !isNonFeedPost(item),
     );
@@ -931,7 +959,8 @@ export default function useLensPosts(sessionClient = null, getWalletClient = nul
 
         const { items, pageInfo } = result.value;
 
-        const rootPostsOnly = items.filter((item) => !item.commentOn);
+        const postsOnly = items.filter((item) => !isRepost(item));
+        const rootPostsOnly = postsOnly.filter((item) => !item.commentOn);
         const generalPostsOnly = rootPostsOnly.filter(
           (item) => !isNonFeedPost(item),
         );
@@ -978,7 +1007,13 @@ export default function useLensPosts(sessionClient = null, getWalletClient = nul
 
         const { items, pageInfo } = result.value;
 
-        const rootPostsOnly = items.filter((item) => !item.commentOn);
+        // FIX: this is exactly the query behind Profile → "Мої пости"
+        // (filters by `authors` alone, with no metadata/tag filter to
+        // naturally exclude Reposts) — see isRepost's comment above
+        // for the full story of why reposting someone else's post
+        // was showing up here as your own content-less post.
+        const postsOnly = items.filter((item) => !isRepost(item));
+        const rootPostsOnly = postsOnly.filter((item) => !item.commentOn);
         const generalPostsOnly = rootPostsOnly.filter(
           (item) => !isNonFeedPost(item),
         );
@@ -1186,6 +1221,31 @@ export default function useLensPosts(sessionClient = null, getWalletClient = nul
           throw new Error(result.error.message);
         }
 
+        // FIX: this used to return { success: true } the moment the
+        // wallet finished SUBMITTING the transaction — not once it
+        // was actually mined and indexed. createLensPost (above)
+        // already waits for confirmation before reporting success;
+        // this action skipped that step entirely. The practical
+        // effect: the caller (PostPage.jsx) would immediately show
+        // "Post deleted" and navigate back to a list that Lens's
+        // indexer hadn't updated yet, so the post still appeared —
+        // looking like the delete "didn't work the first time,"
+        // when it had actually just not been indexed yet. Same
+        // wait-with-timeout pattern as createLensPost's txHash wait.
+        const txHash = result.value;
+        if (txHash && typeof txHash === "string") {
+          const txTimeout = new Promise((_, reject) =>
+            setTimeout(
+              () => reject(new Error("Transaction indexing timeout (30s)")),
+              30000,
+            ),
+          );
+          await Promise.race([
+            activeSessionClient.waitForTransaction(txHash),
+            txTimeout,
+          ]);
+        }
+
         return { success: true };
       } catch (err) {
         console.error("❌ Error deleting Lens post:", err);
@@ -1286,7 +1346,22 @@ export default function useLensPosts(sessionClient = null, getWalletClient = nul
   );
 
   /**
-   * Додати реакцію — "Правда" (UPVOTE) або "Неправда" (DOWNVOTE)
+   * Додати реакцію — "Правда" (UPVOTE) або "Неправда" (DOWNVOTE).
+   *
+   * ФІКС: раніше цей хук (і кожен виклик з CountryFeed.jsx/PostPage.jsx/
+   * FollowingPage.jsx) намагався сам вираховувати лічильники локально
+   * (+1/-1) та "захисно" викликати undoReaction на протилежній реакції
+   * перед додаванням нової. Це й було джерелом багу з дублюванням
+   * ("Правда" +1 одночасно з "Неправда" +1): Lens API не гарантує
+   * безпечний no-op для undoReaction на реакції, якої по факту немає —
+   * а локальна математика могла розійтись із реальним станом сервера
+   * (localStorage, що вже прибрано, гонки при швидких кліках тощо).
+   *
+   * Тепер: сама функція лише викликає Lens API один раз, без жодних
+   * припущень про попередній стан. Хто і коли вирішує, чи потрібно
+   * спершу зняти протилежну реакцію — вирішує ВИКЛИКАЮЧИЙ код на основі
+   * СВІЖОДОВАНОГО з сервера post.my_reaction (через getLensPost), а не
+   * локально порахованого значення.
    */
   const addLensReaction = useCallback(
     async (lensPostId, reactionType) => {
@@ -1301,9 +1376,9 @@ export default function useLensPosts(sessionClient = null, getWalletClient = nul
 
         if (result.isErr()) throw new Error(result.error.message);
 
-        // ADDED: NIP-25 reaction cross-post ("+"/"-" content is the
-        // NIP-25 convention for like/dislike) — same local-map
-        // limitation as repost above.
+        // NIP-25 reaction cross-post ("+"/"-" content is the NIP-25
+        // convention for like/dislike) — best-effort, never affects the
+        // Lens reaction result above.
         try {
           const parentNostr = getNostrEventForLensPost(lensPostId);
           if (parentNostr) {
@@ -1336,7 +1411,9 @@ export default function useLensPosts(sessionClient = null, getWalletClient = nul
   );
 
   /**
-   * Скасувати раніше поставлену реакцію (toggle off)
+   * Скасувати раніше поставлену реакцію (toggle off). Голий виклик Lens
+   * API — жодної локальної логіки. Викликати лише коли достеменно відомо
+   * (зі свіжих даних сервера), що ця реакція справді існує.
    */
   const removeLensReaction = useCallback(
     async (lensPostId, reactionType) => {

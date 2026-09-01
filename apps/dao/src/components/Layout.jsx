@@ -441,6 +441,24 @@ export default function Layout() {
             <span className="text-[12px] font-mono text-parchmentDim">
               {t("dao.common.brandLine")}
             </span>
+            {/* Same footer link row as dossier's RightSidebar.jsx
+                (About · Terms · Privacy) — kept here, not in the main
+                nav, since these are legal/informational pages rather
+                than governance features. */}
+            <div className="flex items-center gap-2 text-[12px] text-parchmentDim">
+              {[
+                { to: "/about", label: t("dao.common.footerAbout") },
+                { to: "/terms", label: t("dao.common.footerTerms") },
+                { to: "/privacy", label: t("dao.common.footerPrivacy") },
+              ].map((link, i) => (
+                <span key={link.to} className="flex items-center gap-2">
+                  {i > 0 && <span className="text-hairlineStrong">·</span>}
+                  <NavLink to={link.to} className="hover:text-parchment transition-colors">
+                    {link.label}
+                  </NavLink>
+                </span>
+              ))}
+            </div>
             <SocialLinksRow size={16} />
           </div>
         </footer>

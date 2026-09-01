@@ -102,6 +102,19 @@ contract ShieldSBT is ERC721, AccessControl, PolicyConsentGate {
     ///         (немає окремого мультисиг-адміна — однакові правила для всіх).
     bytes32 public constant DAO_ROLE = keccak256("DAO_ROLE");
 
+    /// @notice Роль для контрольованої крос-чейн/крос-деплой міграції
+    ///         даних (Influence/Shield/Council-статус) — див.
+    ///         CROSS_CHAIN_MIGRATION_DESIGN.md. Видається ЛИШЕ контракту
+    ///         MigrationClaim через setMigrationClaim(), і ЛИШЕ через
+    ///         DAO governance (звичайний propose→vote→queue→execute).
+    ///         За замовчуванням НІКОМУ не видана — dormant з дня генезису,
+    ///         активується тільки якщо/коли DAO реально вирішить мігрувати
+    ///         на новий деплой (той самий чи інший чейн). DAO зобов'язана
+    ///         відкликати цю роль одразу після закриття вікна міграції —
+    ///         постійно активна MIGRATION_ROLE була б бекдором для
+    ///         довільного мінту в обхід перевірок Influence/humanity.
+    bytes32 public constant MIGRATION_ROLE = keccak256("MIGRATION_ROLE");
+
     // ── Конфігурація ─────────────────────────────────────────────
     InfluenceRegistry public immutable influenceRegistry;
 
@@ -239,6 +252,65 @@ contract ShieldSBT is ERC721, AccessControl, PolicyConsentGate {
     ) external {
         _consentBySignature(msg.sender, policyHash, deadline, signature);
         _doMint(msg.sender);
+    }
+
+    /**
+     * @notice Мінтить ShieldSBT БЕЗ live-перевірки Influence/humanity — для
+     *         контрольованої міграції даних (Merkle-proof уже верифікований
+     *         MigrationClaim перед цим викликом, див.
+     *         CROSS_CHAIN_MIGRATION_DESIGN.md). Викликається ЛИШЕ адресою
+     *         з MIGRATION_ROLE (тобто лише затвердженим DAO контрактом
+     *         MigrationClaim, і лише поки DAO не відкликала роль).
+     * @param account          Отримувач (та сама адреса, що у знімку джерела).
+     * @param originalMintedAt `memberSince` зі знімку джерела — зберігає
+     *                          РЕАЛЬНИЙ стаж у статусі Захисника (важливо
+     *                          для порогу переходу в Consul: якщо тут
+     *                          поставити block.timestamp замість
+     *                          оригінального значення, весь стаж хибно
+     *                          "згорає" в момент міграції — несправедливо
+     *                          для вже давніх, заслужених учасників).
+     * @dev requiredCouncilDuration НАВМИСНО рахується заново від
+     *      _currentGraceDuration() тут-і-зараз, а не переноситься зі
+     *      знімку — grace-період залежить від "віку проєкту"
+     *      (projectStartTimestamp в InfluenceRegistry), і поточне значення
+     *      цього поля (перенесене окремо, якщо це справжня крос-чейн
+     *      міграція) є коректною базою для розрахунку.
+     */
+    function migrationMint(address account, uint256 originalMintedAt)
+        external
+        onlyRole(MIGRATION_ROLE)
+    {
+        require(account != address(0), "Shield: zero account");
+        require(accountToTokenId[account] == 0, "Shield: already member");
+        require(originalMintedAt > 0 && originalMintedAt <= block.timestamp, "Shield: invalid originalMintedAt");
+
+        _tokenIdCounter++;
+        _totalSupply++;
+        _activeSupply++;
+        uint256 tid = _tokenIdCounter;
+
+        accountToTokenId[account]       = tid;
+        memberSince[account]            = originalMintedAt;
+        requiredCouncilDuration[account] = _currentGraceDuration();
+        _countedActive[account]         = true;
+        _mint(account, tid);
+        _totalSupplyCheckpoints.push(uint48(block.timestamp), uint208(_totalSupply));
+        _activeSupplyCheckpoints.push(uint48(block.timestamp), uint208(_activeSupply));
+
+        emit Locked(tid);
+        emit ShieldMinted(account, tid);
+    }
+
+    /// @notice Видати/відкликати MIGRATION_ROLE контракту MigrationClaim.
+    ///         Той самий принцип, що setDisciplineModule нижче — лише
+    ///         DAO_ROLE (тобто через повний governance-цикл), ніколи
+    ///         напряму деплоєром. Рекомендація: викликати enabled=false
+    ///         (відкликати) окремою DAO-пропозицією одразу після закриття
+    ///         заявленого вікна міграції.
+    function setMigrationClaim(address claimContract, bool enabled) external onlyRole(DAO_ROLE) {
+        require(claimContract != address(0), "Shield: zero migration claim");
+        if (enabled) _grantRole(MIGRATION_ROLE, claimContract);
+        else _revokeRole(MIGRATION_ROLE, claimContract);
     }
 
     function _doMint(address account) private {

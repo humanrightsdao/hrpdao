@@ -315,8 +315,19 @@ const CreatePostModal = ({ onClose }) => {
       // never blocks or reverts the Lens post above, which already
       // succeeded regardless of what happened here.
       setNostrCrossPostStatus(lensResult.nostr || null);
+      // FIX: this used to call onClose() (unmounting the modal, which
+      // briefly reveals the stale page underneath — one visible
+      // transition) and THEN window.location.reload() a moment later
+      // (a second, much heavier transition: wallet reconnect + Lens
+      // session restore + full app re-bootstrap from scratch). Back
+      // to back, those two separate transitions read as "the page
+      // reloaded twice." onClose() is redundant here — the reload()
+      // below destroys the whole page (modal included) anyway, so
+      // there's nothing left for it to accomplish except that extra
+      // visible flicker. Letting the success message stay on screen
+      // for the same second, then reloading directly, keeps this to
+      // one single transition instead of two.
       setTimeout(() => {
-        onClose();
         window.location.reload();
       }, 1000);
     } catch (err) {

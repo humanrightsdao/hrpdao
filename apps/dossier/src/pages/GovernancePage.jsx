@@ -24,13 +24,19 @@ import React, { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import Layout from "../components/Layout";
 import { useLensAuth } from "../context/LensAuthContext";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import CreatePostModal from "../components/CreatePostModal";
 import useUserInfo from "../hooks/useUserInfo";
 import { useLensDAO } from "../hooks/useLensDAO";
 import { useTipJar } from "../hooks/useTipJar";
 import useLensPosts from "../hooks/useLensPosts";
 import ModerationQueue from "../components/ModerationQueue";
+// ADDED: resolves a "?case=<id>" deep link (the DAO app's "View report
+// in Dossier" link on each SanctionProposalCard) to the actual reported
+// Lens post, instead of just dropping the visitor on the general
+// moderation queue. See the resolveCaseDeepLink effect below for why
+// this needs a full report-comment scan rather than a direct lookup.
+import { fetchAllReportComments } from "../utils/postReports";
 
 // Full DAO governance (token/proposals/propose/params) now lives
 // exclusively in the separate DAO app — see GovernanceRedirect.jsx for
@@ -181,6 +187,54 @@ const GovernancePage = () => {
   const [showCreatePostModal, setShowCreatePostModal] = useState(false);
   const navigate = useNavigate();
 
+  // ── "View report in Dossier" deep link (?case=<id>) ──────────────
+  // The DAO app's SanctionProposalCard only has the on-chain
+  // violationPostRef (a keccak256 hash — one-way, the real Lens postId
+  // can't be recovered from it), so it can only hand us the
+  // human-readable proposal id and send the visitor here. The reported
+  // post's actual id lives in the REPORT_TAG comment tied to this
+  // proposal (either the original report, if a Shield/Council owner
+  // sanctioned on the spot, or the system escalation-link comment
+  // ModerationQueue.jsx publishes when a moderator escalates an
+  // existing report) — so resolving the link means scanning report
+  // comments for a matching onchainProposalId, same as ModerationQueue
+  // itself does to detect "already escalated" reports.
+  const [searchParams] = useSearchParams();
+  const caseId = searchParams.get("case");
+  const [resolvingCase, setResolvingCase] = useState(!!caseId);
+  const [caseLookupFailed, setCaseLookupFailed] = useState(false);
+
+  useEffect(() => {
+    if (!caseId) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const reports = await fetchAllReportComments();
+        const match = reports.find(
+          (r) => r.parentPostId && String(r.onchainProposalId) === String(caseId),
+        );
+        if (cancelled) return;
+        if (match) {
+          navigate(`/post/${match.parentPostId}`, { replace: true });
+          return;
+        }
+        // No report comment references this case — indexer lag right
+        // after escalation, or the report was since removed. Fall back
+        // to the moderation queue below instead of a dead end.
+        setCaseLookupFailed(true);
+      } catch (err) {
+        console.error("Case deep-link lookup failed:", err);
+        setCaseLookupFailed(true);
+      } finally {
+        if (!cancelled) setResolvingCase(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [caseId]);
+
   const dao = useLensDAO();
   const tipJar = useTipJar();
   // sessionClient is needed for createLensComment() below (publishing a
@@ -291,6 +345,23 @@ const GovernancePage = () => {
   const headingCls = "text-slate-900 dark:text-white/65";
   const bodyCls = "text-slate-700 dark:text-white/25";
 
+  // While resolving a "?case=" deep link, show a plain spinner instead
+  // of the full moderation queue — same visual pattern as
+  // GovernanceRedirect.jsx's handoff screen, so a link straight from
+  // the DAO app doesn't flash the whole page before jumping to /post/:id.
+  if (resolvingCase) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-slate-50 dark:bg-[#000d1f]">
+        <div className="text-center">
+          <div className="inline-block w-12 h-12 rounded-full border-2 border-blue-600/40 border-t-blue-400 animate-spin" />
+          <p className="mt-4 text-[14px] text-slate-600 dark:text-white/40">
+            {t("opening_report") || "Opening report…"}
+          </p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <Layout
       userProfile={userInfo}
@@ -306,7 +377,7 @@ const GovernancePage = () => {
         />
       )}
 
-      <div className="h-full flex flex-col pt-4 pb-4 px-0 lg:p-4 gap-4">
+      <div className="h-full flex flex-col gap-4">
         <div
           className={`flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-slate-300 dark:border-white/[0.06]`}
         >
@@ -405,6 +476,12 @@ const GovernancePage = () => {
                 <h2 className="text-[15px] font-semibold text-slate-700 dark:text-white/80">
                   {t("moderation_panel")}
                 </h2>
+                {caseLookupFailed && (
+                  <p className="text-[13px] text-amber-700 dark:text-amber-400/80 leading-relaxed">
+                    {t("case_link_not_found") ||
+                      `Couldn't find the reported post for case #${caseId} — it may have been removed, or the index hasn't caught up yet. Showing the full queue below.`}
+                  </p>
+                )}
                 <ModerationQueue
                   dao={dao}
                   createLensComment={createLensComment}

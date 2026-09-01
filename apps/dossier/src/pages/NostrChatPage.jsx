@@ -345,7 +345,7 @@ export default function NostrChatPage() {
       // viewports this collapses back to the old one-screen-at-a-time
       // behavior via the `md:` responsive classes below — see the
       // aside/main visibility comments.
-      <div className="max-w-6xl mx-auto px-4 py-6 flex flex-col h-[calc(100vh-80px)] overflow-hidden">
+      <div className="flex flex-col h-[calc(100vh-80px)] overflow-hidden">
         {(deriving || identityError) && (
           <div className="text-[13px] text-slate-500 dark:text-white/40 mb-3 flex-shrink-0">
             {deriving

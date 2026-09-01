@@ -6,10 +6,10 @@ export const storageClient = StorageClient.create();
 
 // The Lens network the app works with.
 // IMPORTANT: must match the network used by lensClient in src/lib/lens.js.
-// In the code (useLensProfile.js, useUserInfo.js) testnet
-// (api.testnet.lens.xyz) is used everywhere — so it's testnet here too.
-// If the app has already moved to mainnet, replace with chains.mainnet.id.
-export const GROVE_CHAIN_ID = chains.testnet.id;
+// MIGRATED to mainnet (api.lens.xyz) — must stay in sync with lib/lens.js's
+// `environment: mainnet`. Files uploaded to Grove with the wrong chain ID
+// in their ACL are unreadable/invalid for the mainnet App.
+export const GROVE_CHAIN_ID = chains.mainnet.id;
 
 /**
  * Uploads a file (avatar) to Grove and returns a lens:// URI,

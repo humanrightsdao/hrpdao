@@ -518,7 +518,7 @@ const SupportPage = () => {
 
       {/* Main page */}
       {!showCreateModal && !showCreatePostModal && (
-        <div className="pt-3 pb-3 px-0 lg:p-4">
+        <div>
           {/* Header */}
           <div className="flex items-start justify-between gap-3 mb-5 pb-4 border-b border-slate-300 dark:border-white/[0.06]">
             <div>

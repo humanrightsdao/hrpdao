@@ -287,7 +287,7 @@ const UserProfilePage = () => {
       error={userError}
       onCreatePost={() => {}}
     >
-      <div className="max-w-4xl mx-auto py-2 px-0 lg:px-1">
+      <div>
         <button
           onClick={() => navigate(-1)}
           className="flex items-center gap-1.5 text-[16px] text-slate-600 dark:text-white/40

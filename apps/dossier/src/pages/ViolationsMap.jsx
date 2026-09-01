@@ -738,7 +738,7 @@ const ViolationsMap = () => {
       )}
 
       {!showCreatePostModal && (
-        <div className="pt-3 pb-3 px-0 lg:p-4">
+        <div>
           {/* Header and statistics */}
           <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 mb-5 pb-4 border-b border-slate-200 dark:border-white/[0.06]">
             <div>

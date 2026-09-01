@@ -24,6 +24,7 @@ function App() {
     loginWithAccount,
     loginAsOnboardingUser,
     logout,
+    justLoggedOutRef,
   } = useLensAuth();
 
   // Автопідключення гаманця, якщо перехід стався за посиланням
@@ -31,10 +32,19 @@ function App() {
   useWalletHandoff(isConnected, connectWallet, address);
 
   useEffect(() => {
-    if (isConnected && address && !sessionClient) {
+    // FIXED (infinite loading spinner on Settings → Log out, requiring
+    // a manual page reload to recover): see the long comment on
+    // justLoggedOutRef in LensAuthContext.jsx for the full story.
+    // Short version — right after logout(), `isConnected` can still
+    // read stale/true for a moment while wagmi/Privy finish tearing
+    // the wallet down asynchronously, and used to make this effect
+    // fetch accounts for that already-logged-out wallet, which then
+    // fed the auto-login effect below and hung forever trying to sign
+    // with a wallet that no longer existed.
+    if (isConnected && address && !sessionClient && !justLoggedOutRef.current) {
       fetchAccounts();
     }
-  }, [isConnected, address, sessionClient]);
+  }, [isConnected, address, sessionClient, justLoggedOutRef]);
 
   const handleLogin = async (accountItem) => {
     const result = await loginWithAccount(accountItem);
@@ -73,6 +83,12 @@ function App() {
   // falls back to the usual Step 2 render below with an account button
   // that lets them retry the login manually.
   useEffect(() => {
+    // See the matching comment on the fetchAccounts effect above and
+    // on justLoggedOutRef in LensAuthContext.jsx — this is the second
+    // half of the same guard: even if `accounts` somehow got
+    // populated (e.g. from a still-in-flight fetch started just
+    // before logout()), don't let this effect try to sign a fresh
+    // login with a wallet that's mid-teardown.
     if (
       isConnected &&
       address &&
@@ -80,12 +96,20 @@ function App() {
       accounts &&
       accounts.length === 1 &&
       !loginLoading &&
-      !autoLoginAttempted.current
+      !autoLoginAttempted.current &&
+      !justLoggedOutRef.current
     ) {
       autoLoginAttempted.current = true;
       handleLogin(accounts[0]);
     }
-  }, [isConnected, address, sessionClient, accounts, loginLoading]);
+  }, [
+    isConnected,
+    address,
+    sessionClient,
+    accounts,
+    loginLoading,
+    justLoggedOutRef,
+  ]);
 
   const handleOnboarding = async () => {
     const result = await loginAsOnboardingUser();
@@ -152,7 +176,7 @@ function App() {
         </div>
 
         {/* Title */}
-       
+
 
         <div className="bg-white dark:bg-[#000d1f] border border-slate-300 dark:border-white/[0.07] rounded-xl p-6 space-y-4">
           {/* Step 1 — wallet not connected */}

@@ -33,6 +33,7 @@ import { isReportComment } from "../utils/postReports";
 // звичайний Lens-коментар з міткою-префіксом у content. Їх теж треба
 // ховати з видимого треду.
 import { isModActionComment } from "../utils/moderationActions";
+import { sanitizeCount } from "../utils/sanitizeCount";
 
 // ── Helpers (ідентичні до PostPage.jsx) ─────────────────────────────────────
 
@@ -80,6 +81,7 @@ export default function useLensComments(
     deleteLensPost,
     addLensReaction,
     removeLensReaction,
+    getLensPost,
   } = useLensPosts(sessionClient, getWalletClient);
 
   const [comments, setComments] = useState([]);
@@ -153,9 +155,22 @@ export default function useLensComments(
           // Це й спричиняло хибне "не Shield/Senate" для коментарів.
           owner_address: c.author?.owner || null,
         },
-        truth_count: c.stats?.upvotes || 0,
-        false_count: c.stats?.downvotes || 0,
-        my_reaction: localStorage.getItem(`lens_reaction_${c.id}`) || null,
+        // ФІКС: sanitizeCount() захищає від пошкоджених значень з Lens
+        // API/індексатора (той самий баг, що й для постів — див.
+        // utils/sanitizeCount.js).
+        truth_count: sanitizeCount(c.stats?.upvotes),
+        false_count: sanitizeCount(c.stats?.downvotes),
+        // FIXED: same bug/fix as normalizeLensPost (useLensPosts.js) —
+        // my_reaction now comes from Lens's own real
+        // operations.hasUpvoted/hasDownvoted instead of localStorage,
+        // which could drift from what's actually on the Lens backend and
+        // trigger the "Правда duplicates onto Неправда" bug via the
+        // defensive-cleanup undoReaction() call below.
+        my_reaction: c.operations?.hasUpvoted
+          ? "truth"
+          : c.operations?.hasDownvoted
+            ? "false"
+            : null,
       }));
 
       normalized.sort(
@@ -286,70 +301,62 @@ export default function useLensComments(
       if (!comment?.lens_comment_id) return { success: false };
 
       const lensCommentId = comment.lens_comment_id;
+      // FIXED: same fix as CountryFeed.jsx/PostPage.jsx/FollowingPage.jsx
+      // — no local +1/-1 counter math and no localStorage anywhere in
+      // this flow. A comment is a Post in Lens v3 too, so the same
+      // getLensPost() refetch applies: after the API call succeeds, pull
+      // the real, server-confirmed truth_count/false_count/my_reaction
+      // and replace the comment's fields wholesale.
       const prevReaction = comment.my_reaction;
       const isToggleOff = prevReaction === reactionType;
-      const nextReaction = isToggleOff ? null : reactionType;
       const oppositeType = reactionType === "truth" ? "false" : "truth";
 
-      const computeNext = (base, reaction) => {
-        let truth = base.truth_count || 0;
-        let falseCount = base.false_count || 0;
-        if (base.my_reaction === "truth") truth = Math.max(0, truth - 1);
-        if (base.my_reaction === "false")
-          falseCount = Math.max(0, falseCount - 1);
-        if (reaction === "truth") truth += 1;
-        if (reaction === "false") falseCount += 1;
-        return { truth, falseCount };
-      };
-
-      const patchComment = (reaction) => {
-        const { truth, falseCount } = computeNext(comment, reaction);
-        setComments((prev) =>
-          prev.map((c) =>
-            c.id === commentId
-              ? {
-                  ...c,
-                  my_reaction: reaction,
-                  truth_count: truth,
-                  false_count: falseCount,
-                }
-              : c,
-          ),
-        );
-      };
-
-      patchComment(nextReaction);
-
-      let clearedStrayPrev = false;
       try {
-        // Cleanup лише при реальному перемиканні реакції (той самий фікс,
-        // що й у PostPage.jsx handleCommentReaction).
-        if (prevReaction === oppositeType) {
-          const cleanupResult = await removeLensReaction(
+        if (isToggleOff) {
+          const result = await removeLensReaction(
             lensCommentId,
-            oppositeType,
+            reactionType,
           );
-          clearedStrayPrev = cleanupResult.success;
+          if (!result.success) throw new Error(result.error);
+        } else {
+          if (prevReaction === oppositeType) {
+            const cleanupResult = await removeLensReaction(
+              lensCommentId,
+              oppositeType,
+            );
+            if (!cleanupResult.success) {
+              console.warn(
+                "⚠️ Failed to clear the opposite reaction:",
+                cleanupResult.error,
+              );
+            }
+          }
+          const result = await addLensReaction(lensCommentId, reactionType);
+          if (!result.success) throw new Error(result.error);
         }
 
-        if (isToggleOff) {
-          await removeLensReaction(lensCommentId, reactionType);
-          localStorage.removeItem(`lens_reaction_${lensCommentId}`);
-        } else {
-          const result = await addLensReaction(lensCommentId, reactionType);
-          if (!result.success) {
-            throw new Error(result.error || "Reaction failed");
-          }
-          localStorage.setItem(`lens_reaction_${lensCommentId}`, reactionType);
+        const fresh = await getLensPost(lensCommentId);
+        if (fresh.success) {
+          setComments((prev) =>
+            prev.map((c) =>
+              c.id === commentId
+                ? {
+                    ...c,
+                    my_reaction: fresh.post.my_reaction,
+                    truth_count: fresh.post.truth_count,
+                    false_count: fresh.post.false_count,
+                  }
+                : c,
+            ),
+          );
         }
         return { success: true };
       } catch (err) {
         console.error("❌ Error handling comment reaction:", err);
-        patchComment(clearedStrayPrev ? null : prevReaction);
         return { success: false, error: err.message };
       }
     },
-    [comments, lensProfile, addLensReaction, removeLensReaction],
+    [comments, lensProfile, addLensReaction, removeLensReaction, getLensPost],
   );
 
   return {
