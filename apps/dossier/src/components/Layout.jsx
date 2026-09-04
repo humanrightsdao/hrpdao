@@ -35,8 +35,13 @@ export default function Layout({
   const location = useLocation();
   const sidebarRef = useRef(null);
   const rightSidebarRef = useRef(null);
-  const contentRef = useRef(null);
   const scrollProxyRef = useRef(null);
+  // Real DOM node of the scrollable feed container, tracked via state
+  // (not a plain ref) so effects that need it can depend on it and re-run
+  // once it actually mounts -- Layout renders a completely different
+  // subtree (skeleton/error/empty) while loading/error/!userProfile are
+  // true, so the node does not exist yet on the very first commit.
+  const [contentEl, setContentEl] = useState(null);
 
   // Mobile menu state
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
@@ -51,7 +56,7 @@ export default function Layout({
 
   // Sync right-edge scroll proxy with central content (desktop only)
   useEffect(() => {
-    const content = contentRef.current;
+    const content = contentEl;
     const proxy = scrollProxyRef.current;
     if (!content || !proxy) return;
 
@@ -101,7 +106,7 @@ export default function Layout({
       ro.disconnect();
       mo.disconnect();
     };
-  }, []);
+  }, [contentEl]);
 
   // Check wallet connection
   useEffect(() => {
@@ -113,8 +118,15 @@ export default function Layout({
 
   // Hide mobile top/bottom bars on scroll-down, reveal on scroll-up (mobile only)
   useEffect(() => {
-    const content = contentRef.current;
+    const content = contentEl;
     if (!content) return;
+
+    // Reset the scroll-tracking baseline for the freshly mounted node —
+    // otherwise a stale value from a previous node (e.g. after switching
+    // out of the loading/error skeleton) could read as a big delta on
+    // the very first scroll event and hide the bars immediately.
+    lastScrollYRef.current = content.scrollTop;
+    setShowMobileNav(true);
 
     const handleScroll = () => {
       const currentY = content.scrollTop;
@@ -135,7 +147,7 @@ export default function Layout({
 
     content.addEventListener("scroll", handleScroll, { passive: true });
     return () => content.removeEventListener("scroll", handleScroll);
-  }, []);
+  }, [contentEl]);
 
   // Track screen size change
   useEffect(() => {
@@ -441,10 +453,18 @@ export default function Layout({
               <div className="hidden lg:block absolute top-0 right-3 bottom-0 w-px bg-gradient-to-b from-transparent via-blue-900 dark:via-gray-700 to-transparent"></div>
 
               <div
-                ref={contentRef}
-                className="h-full content-scroll smooth-scroll overflow-y-auto hide-scrollbar"
+                ref={setContentEl}
+                // Mobile: the scrollable window now starts at the very top of
+                // the viewport (the fixed Navbar no longer reserves space in
+                // flow) and is only shortened by the bottom nav's clearance,
+                // so real feed content exists underneath the navbar and
+                // becomes visible when it's hidden on scroll — pt-20 (5rem,
+                // matching the pb-20 convention used for the bottom bar)
+                // keeps the first card clear of the navbar while it's shown.
+                // Desktop: unchanged (Navbar stays `sticky`/always visible
+                // there, so it still reserves its own 4rem in flow).
+                className="content-scroll smooth-scroll overflow-y-auto hide-scrollbar h-[calc(100vh-4rem)] lg:h-[calc(100vh-8rem)] pt-20 lg:pt-0"
                 style={{
-                  height: "calc(100vh - 8rem)",
                   paddingBottom: "5rem",
                 }}
               >

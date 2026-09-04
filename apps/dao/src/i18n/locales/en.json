@@ -1077,7 +1077,23 @@
       "qrHint": "Show this code to another member offline — they'll scan it and see your public business card without connecting their own wallet.",
       "qrAlt": "Business card QR code",
       "qrGenerating": "generating…",
-      "downloadPng": "Download PNG"
+      "downloadPng": "Download PNG",
+      "payMethod": {
+        "crypto": "Crypto",
+        "card": "Card"
+      },
+      "onramp": {
+        "switchHint": "No crypto? Switch to the \"Card\" tab above."
+      },
+      "fiat": {
+        "buyingGas": "Topping up ETH for gas…",
+        "buyingToken": "Buying crypto with your card…",
+        "waitingFunds": "Waiting for funds to arrive on-chain…",
+        "stillWaiting": "Still on the way — this can take a minute. Try again shortly.",
+        "sending": "Sending your tip…",
+        "processing": "Processing…",
+        "payWithCard": "Pay with card · ${{amount}}"
+      }
     },
     "home": {
       "title": "Human Rights Policy DAO",

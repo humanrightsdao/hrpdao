@@ -180,9 +180,6 @@ contract OptimisticEpochSubmission is AccessControl, ReentrancyGuard {
         );
 
         uint256 bond = requiredBond;
-        if (msg.value > bond) {
-            _safeSend(msg.sender, msg.value - bond); // рефанд переплати
-        }
 
         bytes32[] memory leaves = new bytes32[](len);
         for (uint256 i = 0; i < len; i++) {
@@ -207,6 +204,18 @@ contract OptimisticEpochSubmission is AccessControl, ReentrancyGuard {
         }
 
         emit EpochSubmitted(currentEpoch, msg.sender, root, len, bond);
+
+        // ── CEI: рефанд переплати — ОСТАННІМ кроком, після ВСІХ записів
+        //    стану й події. Раніше йшов одразу після requestBond-перевірки
+        //    (до запису submissions[currentEpoch]) — Slither (reentrancy-eth)
+        //    коректно вказав на порушення CEI. Практичний ризик був
+        //    низьким (submitEpochResult має nonReentrant; єдиний
+        //    cross-function вектор — forceOpenEpoch() — вимагає вже
+        //    скомпрометованої DAO_ROLE/GUARDIAN_ROLE), але виправлення
+        //    коштує нуля функціональних змін.
+        if (msg.value > bond) {
+            _safeSend(msg.sender, msg.value - bond); // рефанд переплати
+        }
     }
 
     // ── Крок 2: fraud-proofs (усі приймають Merkle-proof, не індекс) ─

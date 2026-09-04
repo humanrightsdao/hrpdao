@@ -406,7 +406,6 @@ contract DisciplineModule {
         p.vetoForVotes++;
 
         emit CouncilVetoed(id, msg.sender);
-        influenceRegistry.touchActivity(msg.sender);
 
         // Знаменник — councilSupplySnapshot, зафіксований на старті
         // veto-вікна, а не живий totalSupply() (та сама логіка, що й
@@ -421,6 +420,15 @@ contract DisciplineModule {
             p.status = Status.Cancelled;
             emit SanctionCancelled(id);
         }
+
+        // ── CEI: зовнішній виклик — ОСТАННІМ кроком, після ВСІХ записів
+        //    стану й подій (включно з умовним p.status = Cancelled вище).
+        //    Раніше йшов у середині функції, до цього умовного запису —
+        //    Slither (reentrancy-no-eth) коректно вказав на порушення
+        //    CEI. Якщо touchActivity() тут revert-не — уся транзакція
+        //    відкотиться разом з усіма записами вище, тож поведінка не
+        //    змінюється, лише порядок операцій стає безпечнішим.
+        influenceRegistry.touchActivity(msg.sender);
     }
 
     // ── Крок 4/5: виконання після завершення veto-вікна ──────────

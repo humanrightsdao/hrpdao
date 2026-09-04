@@ -141,8 +141,6 @@ contract CouncilSBT is ERC721, AccessControl {
             "Council: membership duration not met"
         );
 
-        humanityGate.verifyHuman(msg.sender, minHumanityScore);
-
         _tokenIdCounter++;
         _totalSupply++;
         _activeSupply++;
@@ -157,6 +155,14 @@ contract CouncilSBT is ERC721, AccessControl {
 
         emit Locked(tid);
         emit CouncilMinted(msg.sender, tid);
+
+        // ── CEI: зовнішній виклик — ОСТАННІМ кроком, після ВСІХ записів
+        //    стану й подій. Раніше йшов до запису accountToTokenId —
+        //    Slither (reentrancy-no-eth) коректно вказав на порушення
+        //    CEI. Якщо verifyHuman() тут revert-не — уся транзакція
+        //    відкотиться разом з усіма записами вище, тож поведінка не
+        //    змінюється, лише порядок операцій стає безпечнішим.
+        humanityGate.verifyHuman(msg.sender, minHumanityScore);
     }
 
     /**

@@ -320,8 +320,6 @@ contract ShieldSBT is ERC721, AccessControl, PolicyConsentGate {
             "Shield: need 200+ Influence"
         );
 
-        humanityGate.verifyHuman(account, minHumanityScore);
-
         _tokenIdCounter++;
         _totalSupply++;
         _activeSupply++; // новий член завжди стартує як АКТИВНИЙ (щойно довів Influence)
@@ -337,6 +335,14 @@ contract ShieldSBT is ERC721, AccessControl, PolicyConsentGate {
 
         emit Locked(tid);
         emit ShieldMinted(account, tid);
+
+        // ── CEI: зовнішній виклик — ОСТАННІМ кроком, після ВСІХ записів
+        //    стану й подій. Раніше йшов до запису accountToTokenId —
+        //    Slither (reentrancy-no-eth) коректно вказав на порушення
+        //    CEI. Якщо verifyHuman() тут revert-не — уся транзакція
+        //    відкотиться разом з усіма записами вище, тож поведінка не
+        //    змінюється, лише порядок операцій стає безпечнішим.
+        humanityGate.verifyHuman(account, minHumanityScore);
     }
 
     /// @notice Поточний поріг пільгового періоду, залежно від віку проекту

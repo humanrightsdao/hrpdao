@@ -176,9 +176,7 @@ contract ScopedProposalsTest is Test {
         rankingEpoch.submitNodeStatus(levels, branchIds, seatCounts, flags);
     }
 
-    uint256[2] DUMMY_A = [uint256(0), uint256(0)];
-    uint256[2][2] DUMMY_B = [[uint256(0), uint256(0)], [uint256(0), uint256(0)]];
-    uint256[2] DUMMY_C = [uint256(0), uint256(0)];
+    uint256[24] DUMMY_PROOF;
 
     /// @dev hexId тут завжди резолюції 1 (branchA/branchB з _buildHex(1, ...))
     ///      — розкриваємо і рівень 0, і рівень 1 (повний ланцюжок), як
@@ -188,8 +186,8 @@ contract ScopedProposalsTest is Test {
         vm.startPrank(who);
         locationRegistry.acceptPolicy(locationRegistry.currentPolicyHash());
         locationRegistry.setLocationCommitment(uint256(hexId) + 1);
-        locationRegistry.revealAncestor(0, hexId.ancestorOf(1), DUMMY_A, DUMMY_B, DUMMY_C);
-        locationRegistry.revealAncestor(LEVEL_1, hexId, DUMMY_A, DUMMY_B, DUMMY_C);
+        locationRegistry.revealAncestor(0, hexId.ancestorOf(1), DUMMY_PROOF);
+        locationRegistry.revealAncestor(LEVEL_1, hexId, DUMMY_PROOF);
         vm.stopPrank();
     }
 

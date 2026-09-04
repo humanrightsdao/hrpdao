@@ -161,21 +161,23 @@ contract Deploy is Script {
             "Deploy: need at least one humanity provider"
         );
 
-        // Гео-реформа v12 (ZK-приватність): на testnet — MockHexAncestryVerifier
-        // (завжди приймає, бо реальний Groth16-доказ Foundry-тести
-        // згенерувати не можуть). На mainnet — РЕАЛЬНИЙ Groth16Verifier
-        // (src/HexAncestryVerifier.sol), згенерований з ПРАВИЛЬНОЇ,
-        // проведеної належним чином trusted-setup церемонії — ⚠️ той
-        // верифікатор, що зараз лежить у репозиторії, згенерований
-        // ЛОКАЛЬНОЮ, ОДНОРАЗОВОЮ, НЕБЕЗПЕЧНОЮ для mainnet церемонією
-        // (див. ZK_PRIVACY_V12_CHANGES.md) — перед mainnet-деплоєм
-        // ОБОВ'ЯЗКОВО перегенерувати з реальної церемонії чи перейти на
-        // PLONK/Halo2.
+        // Гео-реформа v13 (ZK-приватність, PLONK): на testnet —
+        // MockHexAncestryVerifier (завжди приймає, бо реальний доказ
+        // Foundry-тести згенерувати не можуть). На mainnet — РЕАЛЬНИЙ
+        // PlonkVerifier (src/HexAncestryVerifier.sol), обов'язково
+        // згенерований з ПУБЛІЧНОГО universal ptau (той самий Powers-of-
+        // Tau файл підходить для БУДЬ-ЯКОГО PLONK-контуру, не лише цього
+        // — на відміну від Groth16, тут не потрібна власна одноосібна
+        // церемонія) — ⚠️ той верифікатор, що зараз лежить у
+        // репозиторії, згенерований ЛОКАЛЬНИМ ТЕСТОВИМ ptau (лише для
+        // перевірки пайплайна) — перед mainnet-деплоєм ОБОВ'ЯЗКОВО
+        // перегенерувати з реального публічного ptau (див.
+        // ZK_PRIVACY_V13_CHANGES.md, розділ "Перед mainnet").
         address hexVerifier;
         if (cfg.testMode) {
             hexVerifier = address(new MockHexAncestryVerifier());
         } else {
-            hexVerifier = address(new Groth16Verifier());
+            hexVerifier = address(new PlonkVerifier());
         }
 
         locationRegistry = new LocationRegistry(

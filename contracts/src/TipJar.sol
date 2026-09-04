@@ -376,9 +376,16 @@ contract TipJar is AccessControl {
 
         if (kind == TokenKind.ORACLE) {
             IPriceFeed feed = IPriceFeed(priceFeed[token]);
-            (, int256 answer, , uint256 updatedAt, ) = feed.latestRoundData();
+            (uint80 roundId, int256 answer, , uint256 updatedAt, uint80 answeredInRound) = feed.latestRoundData();
             require(answer > 0, "TipJar: invalid oracle price");
             require(block.timestamp - updatedAt <= maxOracleStaleness, "TipJar: oracle price stale");
+            // Додатковий (опційний, "belt-and-suspenders") захист поверх
+            // staleness-чека вище: answeredInRound < roundId сигналізує,
+            // що відповідь сформована в СТАРІШОМУ раунді, ніж поточний
+            // заявлений — класичний edge-case "завислого" раунду
+            // (актуальніше для старої Flux Aggregator-архітектури
+            // Chainlink, ніж для сучасної OCR, але дешево перевірити).
+            require(answeredInRound >= roundId, "TipJar: stale oracle round");
 
             uint8 priceDecimals = feed.decimals();
             uint8 tDecimals     = tokenDecimals[token];

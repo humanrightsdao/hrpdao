@@ -97,7 +97,7 @@ const FollowingPage = () => {
     repostLensPost,
     addLensReaction,
     removeLensReaction,
-    getLensPost,
+    getLensPostConfirmed,
   } = useLensPosts(sessionClient, getWalletClient);
 
   const [activeTab, setActiveTab] = useState("following");
@@ -391,7 +391,11 @@ const FollowingPage = () => {
         if (!result.success) throw new Error(result.error);
       }
 
-      const fresh = await getLensPost(lensPostId);
+      // ДОДАНО: getLensPostConfirmed замість голого getLensPost — коротка
+      // повторна перевірка, якщо сервер ще не встиг застосувати обидва
+      // виклики вище до цього рефетчу.
+      const expectedReaction = isTogglingOff ? null : reactionType;
+      const fresh = await getLensPostConfirmed(lensPostId, expectedReaction);
       if (fresh.success) {
         setReactionOverrides((prev) => ({
           ...prev,

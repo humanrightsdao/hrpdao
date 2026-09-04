@@ -5,6 +5,7 @@ import { Loader2 } from "lucide-react";
 import { useAccount } from "wagmi";
 import { CONTRACTS, ACTIVE_CHAIN } from "../hooks/useDao";
 import { useTipJar } from "../hooks/useTipJar";
+import { useFiatOnramp } from "../hooks/useFiatOnramp";
 import { truncAddr, fmtNum } from "../lib/format";
 import { tDaoMessage } from "../lib/daoMessages";
 import Identity from "./Identity";
@@ -55,6 +56,23 @@ export default function CardPreview({ address, showFooterNote = true }) {
   const [split, setSplit] = useState(null);
   const [previewRightsAmount, setPreviewRightsAmount] = useState(null);
   const [tipStatus, setTipStatus] = useState("");
+
+  // ── Fiat onramp (buy crypto with a card) ─────────────────────
+  // Self-disables on testnets / while the feature flag is off — see
+  // useFiatOnramp.js for why. When disabled, no "Карткою" tab renders
+  // at all — the form falls back to crypto-only, exactly as before.
+  const onramp = useFiatOnramp();
+  // "crypto" | "card" — which tab of the form is showing. Always
+  // starts on "crypto"; the toggle itself only renders when
+  // onramp.enabled, so this stays "crypto" forever on unsupported
+  // chains and nothing below ever shows the card-pay UI.
+  const [payMethod, setPayMethod] = useState("crypto");
+  // Single combined card-pay flow state — see handlePayWithCard().
+  // null when idle; one of "checking"|"gas"|"token"|"waiting"|"sending"
+  // while in progress; back to null when done (success or error, with
+  // the result left in cardFlowMessage either way).
+  const [cardFlowStage, setCardFlowStage] = useState(null);
+  const [cardFlowMessage, setCardFlowMessage] = useState("");
 
   const isSelf =
     !!viewerAddress && !!address && viewerAddress.toLowerCase() === address.toLowerCase();
@@ -125,6 +143,112 @@ export default function CardPreview({ address, showFooterNote = true }) {
           : `✗ ${tDaoMessage(t, res.error)}`,
       );
     }
+  }
+
+  // Rough "does this wallet look like it can't even pay gas" check —
+  // deliberately conservative (a few cents worth of ETH). Not a gas
+  // estimate — the actual tip() gas limit is estimated dynamically in
+  // useTipJar.js's sendTip(); this is only a threshold for deciding
+  // whether handlePayWithCard needs a gas top-up first.
+  const GAS_BALANCE_FLOOR = ethers.parseEther("0.0003");
+
+  // ── Single "Pay with card" flow ──────────────────────────────────
+  // Chains gas top-up → token purchase → wait for on-chain settlement
+  // → send the tip, all behind one button, with no crypto terminology
+  // in the visible UI (see the "card" tab below). Re-checks live
+  // balances at each stage rather than trusting local state, so it's
+  // safe to click again after an error or a settlement timeout — it
+  // will skip whatever's already been bought and pick up where it
+  // left off, instead of buying gas/tokens a second time.
+  //
+  // ⚠️ KNOWN LIMITATION: this assumes the selected token is a
+  // STABLE-kind token in TipJar.sol (fixed $1≈1 unit) — the $ amount
+  // typed by the user is passed straight through as the token amount.
+  // If the DAO ever adds an ORACLE-kind token (e.g. ETH) as a *card*
+  // funding option, this 1:1 assumption breaks and this flow would
+  // need to convert $ → token amount using previewInfluence's inverse
+  // (or a live price) before calling fundToken/sendTip. Not needed
+  // today since only stablecoins are configured, but flag it before
+  // extending TIP_TOKENS with a non-stablecoin for the card tab.
+  async function handlePayWithCard() {
+    if (!selectedToken || !viewerAddress || cardFlowStage) return;
+    setCardFlowMessage("");
+    const targetAmount = Number(amount);
+    if (!targetAmount || targetAmount <= 0) return;
+
+    const provider = new ethers.JsonRpcProvider(ACTIVE_CHAIN.rpcUrls[0]);
+
+    // ── Step 1: gas (skip if the wallet already has enough) ────────
+    setCardFlowStage("checking");
+    let freshNative = null;
+    try {
+      freshNative = await provider.getBalance(viewerAddress);
+    } catch {
+      freshNative = null;
+    }
+    if (freshNative === null || freshNative < GAS_BALANCE_FLOOR) {
+      setCardFlowStage("gas");
+      setCardFlowMessage(t("dao.card.fiat.buyingGas"));
+      const gasRes = await onramp.fundGas(viewerAddress);
+      if (!gasRes.success) {
+        setCardFlowMessage(`✗ ${gasRes.error}`);
+        setCardFlowStage(null);
+        return;
+      }
+    }
+
+    // ── Step 2: the tip token itself (skip if already enough) ──────
+    const freshInfo = await tipJar.getTokenInfo(viewerAddress, selectedToken.address);
+    if (freshInfo) setTokenInfo(freshInfo);
+    const alreadyHave = freshInfo ? Number(freshInfo.balanceFormatted) : 0;
+
+    if (alreadyHave < targetAmount) {
+      setCardFlowStage("token");
+      setCardFlowMessage(t("dao.card.fiat.buyingToken"));
+      const tokenRes = await onramp.fundToken(viewerAddress, selectedToken.address, amount);
+      if (!tokenRes.success) {
+        setCardFlowMessage(`✗ ${tokenRes.error}`);
+        setCardFlowStage(null);
+        return;
+      }
+
+      // Onramp purchases aren't instant — wait for the tokens to
+      // actually land on-chain before trying to spend them. Polls for
+      // up to ~60s; if it times out we stop WITHOUT re-buying (a
+      // second click will just re-check the balance, see the
+      // alreadyHave check above) — safer than silently looping.
+      setCardFlowStage("waiting");
+      setCardFlowMessage(t("dao.card.fiat.waitingFunds"));
+      let landed = false;
+      for (let i = 0; i < 20; i++) {
+        await new Promise((r) => setTimeout(r, 3000));
+        const info = await tipJar.getTokenInfo(viewerAddress, selectedToken.address);
+        if (info) setTokenInfo(info);
+        if (info && Number(info.balanceFormatted) >= targetAmount) {
+          landed = true;
+          break;
+        }
+      }
+      if (!landed) {
+        setCardFlowMessage(t("dao.card.fiat.stillWaiting"));
+        setCardFlowStage(null);
+        return;
+      }
+    }
+
+    // ── Step 3: send the tip itself — same contract call as the
+    // crypto tab's "Send Tip" button, just triggered automatically. ──
+    setCardFlowStage("sending");
+    setCardFlowMessage(t("dao.card.fiat.sending"));
+    const res = await tipJar.sendTip(address, amount, null, selectedToken.address);
+    if (res.success) {
+      setCardFlowMessage(t("dao.card.tipSentSuccess"));
+    } else {
+      // eslint-disable-next-line no-console
+      console.error("[CardPreview] handlePayWithCard sendTip failed:", res.error);
+      setCardFlowMessage(`✗ ${tDaoMessage(t, res.error)}`);
+    }
+    setCardFlowStage(null);
   }
 
   const isLoadingTip = tipJar?.loading ?? false;
@@ -207,11 +331,118 @@ export default function CardPreview({ address, showFooterNote = true }) {
             )}
           </p>
 
+          {/* ── Payment method toggle ──────────────────────────────
+              Only rendered when useFiatOnramp.js has determined we're
+              on a supported (mainnet) chain AND the feature flag is
+              on — see that file. On testnets/while disabled this
+              never renders, payMethod stays "crypto" forever, and the
+              form below is identical to before this feature existed. */}
+          {onramp.enabled && (
+            <div className="flex gap-1.5 mb-4">
+              <button
+                type="button"
+                onClick={() => setPayMethod("crypto")}
+                className={`flex-1 py-1.5 text-[12px] font-medium rounded-lg border transition-all ${
+                  payMethod === "crypto"
+                    ? "bg-seal border-seal/40 text-white"
+                    : "bg-surface2 border-hairline text-parchmentDim hover:border-hairlineStrong hover:text-parchment"
+                }`}
+              >
+                {t("dao.card.payMethod.crypto")}
+              </button>
+              <button
+                type="button"
+                onClick={() => setPayMethod("card")}
+                className={`flex-1 py-1.5 text-[12px] font-medium rounded-lg border transition-all ${
+                  payMethod === "card"
+                    ? "bg-seal border-seal/40 text-white"
+                    : "bg-surface2 border-hairline text-parchmentDim hover:border-hairlineStrong hover:text-parchment"
+                }`}
+              >
+                {t("dao.card.payMethod.card")}
+              </button>
+            </div>
+          )}
+
           {/* ── Tip form ─────────────────────────────────────────── */}
           {TIP_TOKENS.length === 0 ? (
             <p className="text-center font-mono text-[12px] text-parchmentDim">
               {t("dao.card.noTipToken")}
             </p>
+          ) : payMethod === "card" ? (
+            /* ── "Карткою" tab — no crypto terminology visible at all.
+                Amount is in $ (see the STABLE-kind assumption noted
+                on handlePayWithCard above), gas/token purchases and
+                the on-chain send all happen inside one button click. ── */
+            <div className="space-y-3">
+              <div className="relative">
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[13px] font-mono text-parchmentDim">
+                  $
+                </span>
+                <input
+                  type="number"
+                  value={amount}
+                  onChange={(e) => setAmount(e.target.value)}
+                  min="0"
+                  step="1"
+                  placeholder={t("dao.card.amountPlaceholder")}
+                  className="w-full pl-6 pr-3 py-2 rounded-lg text-[13px] bg-surface2 border border-hairline focus:border-verdigris focus:ring-1 focus:ring-verdigris/20 text-parchment placeholder-parchmentDim/40 font-mono outline-none transition-all"
+                />
+              </div>
+
+              <div className="flex gap-1.5">
+                {PRESET_AMOUNTS.map((a) => (
+                  <button
+                    key={a}
+                    type="button"
+                    onClick={() => setAmount(a)}
+                    className={`flex-1 py-1.5 text-[11px] font-medium rounded-lg border transition-all ${
+                      amount === a
+                        ? "bg-seal border-seal/40 text-white"
+                        : "bg-surface2 border-hairline text-parchmentDim hover:border-hairlineStrong hover:text-parchment"
+                    }`}
+                  >
+                    ${a}
+                  </button>
+                ))}
+              </div>
+
+              {previewRightsAmount !== null && (
+                <p className="text-[11px] font-mono text-verdigrisBright">
+                  {t("dao.card.receiveEstimate", { amount: fmtNum(previewRightsAmount) })}
+                </p>
+              )}
+
+              {isSelf ? (
+                <p className="text-center font-mono text-[11px] text-parchmentDim py-2">
+                  {t("dao.card.ownCard")}
+                </p>
+              ) : (
+                <button
+                  type="button"
+                  onClick={handlePayWithCard}
+                  disabled={cardFlowStage !== null || !amount || Number(amount) <= 0}
+                  className="w-full flex items-center justify-center gap-2 py-2.5 rounded-lg text-[13px] font-medium transition-colors bg-seal border border-seal/40 text-white hover:bg-sealDeep disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  {cardFlowStage && (
+                    <span className="w-3.5 h-3.5 border-2 border-white/60 border-t-transparent rounded-full animate-spin" />
+                  )}
+                  {cardFlowStage
+                    ? cardFlowMessage || t("dao.card.fiat.processing")
+                    : t("dao.card.fiat.payWithCard", { amount: amount || 0 })}
+                </button>
+              )}
+
+              {!cardFlowStage && cardFlowMessage && (
+                <p
+                  className={`text-center font-mono text-[11px] ${
+                    cardFlowMessage.startsWith("✓") ? "text-verdigrisBright" : "text-sealBright"
+                  }`}
+                >
+                  {cardFlowMessage}
+                </p>
+              )}
+            </div>
           ) : (
             <div className="space-y-3">
               {/* Currency selector */}
@@ -309,6 +540,18 @@ export default function CardPreview({ address, showFooterNote = true }) {
               {overBalance && (
                 <p className="text-[11px] font-mono text-sealBright">
                   {t("dao.card.notEnough", { symbol: tokenInfo.symbol })}
+                </p>
+              )}
+
+              {/* Nudge toward the "Карткою" tab instead of duplicating
+                  onramp buttons here — the toggle above is the single,
+                  explicit place to switch payment method (see the
+                  discussion that led to this — burying rescue buttons
+                  inside the crypto form read as an afterthought, not
+                  a real choice). */}
+              {onramp.enabled && overBalance && (
+                <p className="text-[11px] font-mono text-parchmentDim">
+                  {t("dao.card.onramp.switchHint")}
                 </p>
               )}
               {underMin && !overBalance && (

@@ -206,7 +206,7 @@ const CountryFeed = ({
     repostLensPost,
     addLensReaction,
     removeLensReaction,
-    getLensPost,
+    getLensPostConfirmed,
   } = useLensPosts(sessionClient, getWalletClient);
 
   // ADDED: normalize h3Cells/h3Cell into a single list of cells for
@@ -558,7 +558,12 @@ const CountryFeed = ({
         if (!result.success) throw new Error(result.error);
       }
 
-      const fresh = await getLensPost(lensPostId);
+      // ДОДАНО: getLensPostConfirmed замість голого getLensPost — якщо
+      // сервер Lens ще не встиг застосувати обидва виклики вище (видалення
+      // протилежної + додавання нової реакції) до цього рефетчу, коротко
+      // повторюємо запит замість того, щоб одразу показати проміжний стан.
+      const expectedReaction = isTogglingOff ? null : reactionType;
+      const fresh = await getLensPostConfirmed(lensPostId, expectedReaction);
       if (fresh.success) {
         setPosts((prev) =>
           prev.map((p) => (p.id === postId ? { ...p, ...fresh.post } : p)),

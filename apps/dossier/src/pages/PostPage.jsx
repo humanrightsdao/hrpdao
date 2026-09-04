@@ -83,6 +83,7 @@ const PostPage = () => {
     addLensReaction,
     removeLensReaction,
     getLensPost,
+    getLensPostConfirmed,
     bookmarkLensPost,
     undoBookmarkLensPost,
   } = useLensPosts(sessionClient, getWalletClient);
@@ -406,7 +407,11 @@ const PostPage = () => {
         if (!result.success) throw new Error(result.error);
       }
 
-      const fresh = await getLensPost(lensPostId);
+      // ДОДАНО: getLensPostConfirmed замість голого getLensPost — коротка
+      // повторна перевірка, якщо сервер ще не встиг застосувати обидва
+      // виклики вище до цього рефетчу.
+      const expectedReaction = isToggleOff ? null : reactionType;
+      const fresh = await getLensPostConfirmed(lensPostId, expectedReaction);
       if (fresh.success) {
         setPost((prev) => ({ ...prev, ...fresh.post }));
       }

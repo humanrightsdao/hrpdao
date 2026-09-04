@@ -81,7 +81,7 @@ export default function useLensComments(
     deleteLensPost,
     addLensReaction,
     removeLensReaction,
-    getLensPost,
+    getLensPostConfirmed,
   } = useLensPosts(sessionClient, getWalletClient);
 
   const [comments, setComments] = useState([]);
@@ -335,7 +335,16 @@ export default function useLensComments(
           if (!result.success) throw new Error(result.error);
         }
 
-        const fresh = await getLensPost(lensCommentId);
+        // ДОДАНО: getLensPostConfirmed замість голого getLensPost — та
+        // сама підстраховка, що й для реакцій на пости (CountryFeed.jsx/
+        // PostPage.jsx/FollowingPage.jsx): коротка повторна перевірка,
+        // якщо сервер ще не встиг застосувати обидва виклики вище до
+        // цього рефетчу.
+        const expectedReaction = isToggleOff ? null : reactionType;
+        const fresh = await getLensPostConfirmed(
+          lensCommentId,
+          expectedReaction,
+        );
         if (fresh.success) {
           setComments((prev) =>
             prev.map((c) =>
@@ -356,7 +365,13 @@ export default function useLensComments(
         return { success: false, error: err.message };
       }
     },
-    [comments, lensProfile, addLensReaction, removeLensReaction, getLensPost],
+    [
+      comments,
+      lensProfile,
+      addLensReaction,
+      removeLensReaction,
+      getLensPostConfirmed,
+    ],
   );
 
   return {

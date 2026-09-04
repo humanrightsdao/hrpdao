@@ -174,8 +174,16 @@ const Navbar = ({ visible = true }) => {
   // Tooltip text for user stats
   return (
     <>
+      {/* Mobile: `fixed` (not `sticky`) — a sticky element still reserves
+          its box in normal document flow even while translated off-screen,
+          so hiding it would just uncover empty page background instead of
+          real feed content. `fixed` removes it from flow entirely and
+          overlays the content, which is already sized/padded (see
+          Layout.jsx) to have real content underneath it. Desktop keeps the
+          original `sticky` behavior (it's forced always-visible there via
+          `lg:translate-y-0`, so this never mattered there anyway). */}
       <nav
-        className={`sticky top-0 z-50 bg-white dark:bg-[#00091c] border-b border-slate-200 dark:border-white/[0.06] transition-all duration-300 ease-in-out lg:translate-y-0 ${
+        className={`fixed lg:sticky top-0 inset-x-0 z-50 bg-white dark:bg-[#00091c] border-b border-slate-200 dark:border-white/[0.06] transition-all duration-300 ease-in-out lg:translate-y-0 ${
           visible ? "translate-y-0" : "-translate-y-full"
         }`}
       >

@@ -623,21 +623,6 @@ const ViolationDetailsPage = () => {
                       </div>
                     )}
 
-                    {/* Coordinates */}
-                    {violation.latitude && violation.longitude && (
-                      <div>
-                        <h3 className="text-[11px] uppercase tracking-[0.1em] font-medium text-slate-500 dark:text-white/40 mb-2">
-                          {t("location") || "Coordinates"}
-                        </h3>
-                        <div className="bg-slate-50 dark:bg-white/[0.025] border border-slate-200 dark:border-white/[0.06] rounded-lg p-2.5">
-                          <p className="text-[14px] text-slate-600 dark:text-white/40 font-mono">
-                            {violation.latitude.toFixed(6)},{" "}
-                            {violation.longitude.toFixed(6)}
-                          </p>
-                        </div>
-                      </div>
-                    )}
-
                     {/* Evidence — small, uniform square thumbnails in a grid;
                     tile size is determined by the number of grid columns
                     (grid-cols) relative to the card's width, not by the

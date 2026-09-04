@@ -53,12 +53,34 @@ const LEGACY_PRIORITY_TO_SEVERITY = {
 };
 
 const extractEvidenceFiles = (metadata) => {
-  if (!metadata?.attachments) return [];
-  return metadata.attachments.map((a) => ({
+  const attachmentFiles = (metadata?.attachments || []).map((a) => ({
     url: a.item,
     type: a.type,
     name: a.altTag || "evidence",
   }));
+
+  // Documents (PDFs) are stored separately as a JSON attribute — see
+  // ViolationsPage.jsx's uploadFilesToGrove/article() — because Lens's
+  // `attachments` schema has no document type. Fold them back in here so
+  // they show up in the same Evidence gallery as photos/videos.
+  const documentsRaw = attr(metadata?.attributes || [], "documents");
+  let documentFiles = [];
+  if (documentsRaw) {
+    try {
+      const parsed = JSON.parse(documentsRaw);
+      if (Array.isArray(parsed)) {
+        documentFiles = parsed.map((d) => ({
+          url: d.item,
+          type: d.type || "application/pdf",
+          name: d.name || "document.pdf",
+        }));
+      }
+    } catch (err) {
+      console.error("❌ Failed to parse 'documents' attribute:", err);
+    }
+  }
+
+  return [...attachmentFiles, ...documentFiles];
 };
 
 const normalizeLensViolation = (lensPost) => {

@@ -40,9 +40,7 @@ contract LocationRankingEpochTest is Test {
 
     bytes32 constant NOTICE_HASH = keccak256("location-notice-v1");
 
-    uint256[2] DUMMY_A = [uint256(0), uint256(0)];
-    uint256[2][2] DUMMY_B = [[uint256(0), uint256(0)], [uint256(0), uint256(0)]];
-    uint256[2] DUMMY_C = [uint256(0), uint256(0)];
+    uint256[24] DUMMY_PROOF; // за замовчуванням масив з 24 нулів, MockHexAncestryVerifier ігнорує вміст
 
     function setUp() public {
         vm.startPrank(deployer);
@@ -73,7 +71,7 @@ contract LocationRankingEpochTest is Test {
         locationRegistry.setLocationCommitment(uint256(hexId) + 1);
         for (uint8 r = 0; r <= resolution; r++) {
             uint64 ancestor = hexId.ancestorOf(resolution - r);
-            locationRegistry.revealAncestor(int8(uint8(r)), ancestor, DUMMY_A, DUMMY_B, DUMMY_C);
+            locationRegistry.revealAncestor(int8(uint8(r)), ancestor, DUMMY_PROOF);
         }
         vm.stopPrank();
     }
@@ -113,7 +111,7 @@ contract LocationRankingEpochTest is Test {
         locationRegistry.acceptPolicy(NOTICE_HASH);
         locationRegistry.setLocationCommitment(999);
         vm.expectRevert("Location: invalid level");
-        locationRegistry.revealAncestor(11, _buildHex(11, 5), DUMMY_A, DUMMY_B, DUMMY_C);
+        locationRegistry.revealAncestor(11, _buildHex(11, 5), DUMMY_PROOF);
         vm.stopPrank();
     }
 
@@ -242,7 +240,7 @@ contract LocationRankingEpochTest is Test {
         locationRegistry.acceptPolicy(NOTICE_HASH);
         locationRegistry.setLocationCommitment(uint256(aliceHex) + 1);
         for (uint8 r = 0; r <= 2; r++) {
-            locationRegistry.revealAncestor(int8(uint8(r)), aliceHex.ancestorOf(6 - r), DUMMY_A, DUMMY_B, DUMMY_C);
+            locationRegistry.revealAncestor(int8(uint8(r)), aliceHex.ancestorOf(6 - r), DUMMY_PROOF);
         }
         vm.stopPrank();
 

@@ -5,16 +5,23 @@ import "@openzeppelin/contracts/access/AccessControl.sol";
 import "@openzeppelin/contracts/utils/structs/Checkpoints.sol";
 import "./PolicyConsentGate.sol";
 
-/// @notice Мінімальний інтерфейс до Groth16-верифікатора, згенерованого
-///         snarkjs (zk/build/HexAncestryVerifier.sol) — навмисно НЕ
-///         імпортується повний файл (він самодостатній, без залежностей,
-///         але концептуально належить до "крипто-інфраструктури", не до
-///         бізнес-логіки; той самий підхід, що й з IPriceFeed у TipJar).
+/// @notice Мінімальний інтерфейс до PLONK-верифікатора, згенерованого
+///         snarkjs (zk/build/HexAncestryVerifier.sol, контракт
+///         PlonkVerifier) — навмисно НЕ імпортується повний файл (він
+///         самодостатній, без залежностей, але концептуально належить до
+///         "крипто-інфраструктури", не до бізнес-логіки; той самий підхід,
+///         що й з IPriceFeed у TipJar).
+///
+/// ⚠️ ЗМІНЕНО відносно v12 (Groth16 → PLONK, див. ZK_PRIVACY_V13_CHANGES.md):
+///    сигнатура verifyProof() тепер приймає ОДИН плаский масив з 24
+///    елементів замість трьох окремих (_pA/_pB/_pC) — це формат,
+///    у якому snarkjs генерує PLONK-докази (одна `A`-точка на 24 слова,
+///    що кодує всі проміжні комітменти й evaluation-докази PLONK, а не
+///    три точки Groth16). Кількість публічних сигналів (3: commitment,
+///    level, branchId) не змінилась.
 interface IHexAncestryVerifier {
     function verifyProof(
-        uint256[2] calldata _pA,
-        uint256[2][2] calldata _pB,
-        uint256[2] calldata _pC,
+        uint256[24] calldata _proof,
         uint256[3] calldata _pubSignals
     ) external view returns (bool);
 }
@@ -223,9 +230,7 @@ contract LocationRegistry is AccessControl, PolicyConsentGate {
     function revealAncestor(
         int8 level,
         uint64 branchId,
-        uint256[2] calldata a,
-        uint256[2][2] calldata b,
-        uint256[2] calldata c
+        uint256[24] calldata proof
     ) external {
         require(level >= 0 && uint8(level) <= MAX_RESOLUTION, "Location: invalid level");
         require(branchId != 0, "Location: invalid branch");
@@ -234,7 +239,7 @@ contract LocationRegistry is AccessControl, PolicyConsentGate {
         require(commitment != 0, "Location: no commitment set");
 
         uint256[3] memory publicSignals = [commitment, uint256(uint8(level)), uint256(branchId)];
-        require(verifier.verifyProof(a, b, c, publicSignals), "Location: invalid ZK proof");
+        require(verifier.verifyProof(proof, publicSignals), "Location: invalid ZK proof");
 
         revealedAncestorOf[msg.sender][level] = branchId;
         _revealedAncestorHistory[msg.sender][level].push(uint48(block.timestamp), uint208(branchId));

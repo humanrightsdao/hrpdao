@@ -426,8 +426,23 @@ const ViolationsPage = () => {
   };
 
   // Uploading files to Grove Storage
+  //
+  // FIX: @lens-protocol/metadata's `attachments` field on article() only
+  // accepts Image/Video/Audio media — its internal schema picks a
+  // sub-schema by matching `type` against the exact MediaImageMimeType /
+  // MediaVideoMimeType / MediaAudioMimeType enum values. There is no
+  // "document" attachment type. `application/pdf` (allowed by
+  // handleFileChange's allowedTypes above, since violation evidence is
+  // often a PDF report) never matches any of those enums, so passing it
+  // straight through as `{ type: file.type, ... }` made article() throw
+  // "Invalid discriminator value" for every PDF — that's the
+  // ValidationError seen in the console. PDFs are now uploaded to Grove
+  // like everything else, but kept out of `attachments` and linked from
+  // the post body/content instead, so they're still attached to the
+  // report without breaking Lens metadata validation.
   const uploadFilesToGrove = async () => {
     const uploadedAttachments = [];
+    const uploadedDocuments = [];
 
     for (let i = 0; i < files.length; i++) {
       const file = files[i];
@@ -438,22 +453,25 @@ const ViolationsPage = () => {
           file,
         );
 
-        const getType = (mime) => {
-          if (mime.startsWith("image/")) return "Image";
-          if (mime.startsWith("video/")) return "Video";
-          return "Image";
-        };
-
-        uploadedAttachments.push({
-          item: fileUri,
-          // ADDED: kept alongside item (the lens://... URI Lens
-          // metadata needs) specifically so the Nostr cross-post below
-          // can link to the actual resolvable https:// file — Nostr
-          // clients can't resolve lens:// at all.
-          gatewayUrl,
-          type: file.type,
-          altTag: file.name,
-        });
+        if (file.type === "application/pdf") {
+          uploadedDocuments.push({
+            item: fileUri,
+            gatewayUrl,
+            type: file.type,
+            name: file.name,
+          });
+        } else {
+          uploadedAttachments.push({
+            item: fileUri,
+            // ADDED: kept alongside item (the lens://... URI Lens
+            // metadata needs) specifically so the Nostr cross-post below
+            // can link to the actual resolvable https:// file — Nostr
+            // clients can't resolve lens:// at all.
+            gatewayUrl,
+            type: file.type,
+            altTag: file.name,
+          });
+        }
 
         setUploadProgress((prev) => ({ ...prev, [i]: 100 }));
       } catch (error) {
@@ -462,7 +480,7 @@ const ViolationsPage = () => {
       }
     }
 
-    return uploadedAttachments;
+    return { attachments: uploadedAttachments, documents: uploadedDocuments };
   };
 
   // Uploading metadata to Grove
@@ -611,8 +629,11 @@ const ViolationsPage = () => {
 
       // 1. First upload the files to Grove
       let attachments = [];
+      let documents = [];
       if (files.length > 0) {
-        attachments = await uploadFilesToGrove();
+        const uploaded = await uploadFilesToGrove();
+        attachments = uploaded.attachments;
+        documents = uploaded.documents;
       }
 
       // 2. Build metadata according to the Step 1 schema
@@ -669,6 +690,28 @@ const ViolationsPage = () => {
           },
           { key: "isAnonymous", value: "false", type: "String" },
           { key: "app", value: "hrpdao", type: "String" },
+          // PDFs can't live in `attachments` (see uploadFilesToGrove) since
+          // Lens's attachment schema only knows Image/Video/Audio. Storing
+          // them here as a JSON attribute keeps them structured data
+          // (not plain text pasted into the description) so
+          // useLensViolations.js can fold them back into evidence_files
+          // and ViolationDetailsPage's existing Evidence gallery renders
+          // them as normal clickable/openable entries.
+          ...(documents.length > 0
+            ? [
+                {
+                  key: "documents",
+                  value: JSON.stringify(
+                    documents.map((d) => ({
+                      item: d.item,
+                      name: d.name,
+                      type: d.type,
+                    })),
+                  ),
+                  type: "JSON",
+                },
+              ]
+            : []),
         ].filter((a) => a.value !== ""), // remove attributes with an empty value
       });
 

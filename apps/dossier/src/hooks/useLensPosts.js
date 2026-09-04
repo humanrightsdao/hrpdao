@@ -362,7 +362,16 @@ export const normalizeLensPost = (lensPost) => {
     reposts_count: lensPost.stats?.reposts || 0,
     bookmarks_count: lensPost.stats?.bookmarks || 0,
     is_bookmarked: lensPost.operations?.hasBookmarked || false,
-    is_reposted: lensPost.operations?.hasReposted || false,
+    // FIXED: hasReposted is NOT a plain boolean like hasUpvoted/hasDownvoted/
+    // hasBookmarked — in the Lens SDK it's an object { optimistic, onChain }
+    // (same shape as hasCommented/hasQuoted). `operations?.hasReposted || false`
+    // was therefore always truthy whenever `operations` was present at all
+    // (a non-null object is always truthy in JS), regardless of whether the
+    // viewer had actually reposted — is_reposted was effectively always true.
+    is_reposted: Boolean(
+      lensPost.operations?.hasReposted?.optimistic ||
+        lensPost.operations?.hasReposted?.onChain,
+    ),
 
     media_urls: extractMediaUrls(metadata).map((m) => m.url),
     media_types: extractMediaUrls(metadata).map((m) => m.type),
@@ -1069,6 +1078,85 @@ export default function useLensPosts(sessionClient = null, getWalletClient = nul
   );
 
   /**
+   * ДОДАНО: захист від можливої затримки eventual-consistency на боці
+   * індексатора Lens. Одразу після addReaction/undoReaction клієнт вже й
+   * так чекає (await) кожен виклик по черзі — але це гарантує лише порядок
+   * ВІДПРАВКИ запитів, а не те, що бекенд Lens встиг повністю застосувати
+   * (видалити протилежну + додати нову реакцію) і переіндексувати стан ДО
+   * того, як прийде наступний getLensPost(). Якщо бекенд оновлюється не
+   * миттєво, негайний рефетч інколи може повернути проміжний стан (напр.,
+   * post.my_reaction ще не збігається з тим, що користувач щойно обрав).
+   *
+   * ПІДТВЕРДЖЕНО НА ПРАКТИЦІ (не лише гіпотеза): реальна відповідь Lens
+   * одразу після кліку "Правда" повернула в ОДНІЙ і тій самій відповіді
+   * `operations.hasUpvoted: true` РАЗОМ із `stats.upvotes: 0`. Тобто
+   * viewer-специфічний прапорець (operations) оновлюється миттєво/
+   * оптимістично, а агрегований лічильник (stats, те саме число, яке
+   * бачить користувач біля кнопки) — з окремою затримкою індексатора.
+   * Перевіряти самé my_reaction (як робилось раніше) НЕДОСТАТНЬО — воно
+   * може вже збігатися з очікуваним, а число на кнопці все ще буде
+   * застарілим/нульовим. Тому нижче звіряється і my_reaction, і те, що
+   * відповідний лічильник (truth_count/false_count) реально відображає
+   * щойно додану реакцію.
+   *
+   * Це НЕ підміна серверної правди локальною математикою (те, через що
+   * власне і стався оригінальний баг "Правда" → "Неправда") — це просто
+   * повторний запит ТІЄЇ Ж САМОЇ getLensPost(), кілька разів з короткою
+   * паузою, аж доки сервер не підтвердить очікуваний результат або не
+   * скінчаться спроби. Останню відповідь сервера показуємо в будь-якому
+   * разі — навіть якщо вона так і не збіглася з очікуванням, це все одно
+   * реальний стан з Lens, а не вигадка клієнта.
+   */
+  const getLensPostConfirmed = useCallback(
+    async (
+      lensPostId,
+      expectedReaction,
+      { maxAttempts = 4, delayMs = 400 } = {},
+    ) => {
+      let last = null;
+      for (let attempt = 0; attempt < maxAttempts; attempt++) {
+        const result = await getLensPost(lensPostId);
+        if (!result.success) return result;
+        last = result;
+
+        const reactionMatches = result.post.my_reaction === expectedReaction;
+        // Для "toggle off" (expectedReaction === null) немає надійного
+        // способу звірити лічильник — після видалення нашої реакції
+        // числа могла ще й одночасно змінити чужа активність (інший
+        // користувач), тож тут довіряємо лише my_reaction. Для реального
+        // ДОДАВАННЯ реакції — вимагаємо, щоб відповідний лічильник уже
+        // показував принаймні 1 (тобто дійсно "підхопив" нашу реакцію),
+        // а не застарілий 0.
+        const countCaughtUp =
+          expectedReaction == null
+            ? true
+            : expectedReaction === "truth"
+              ? result.post.truth_count > 0
+              : result.post.false_count > 0;
+
+        if (reactionMatches && countCaughtUp) {
+          return result;
+        }
+        if (attempt < maxAttempts - 1) {
+          await new Promise((resolve) => setTimeout(resolve, delayMs));
+        }
+      }
+      console.warn(
+        "⚠️ getLensPostConfirmed: сервер так і не підтвердив очікуваний стан (my_reaction і/або лічильник) після повторних спроб — показуємо останню відповідь як є.",
+        {
+          lensPostId,
+          expectedReaction,
+          gotReaction: last?.post?.my_reaction,
+          gotTruthCount: last?.post?.truth_count,
+          gotFalseCount: last?.post?.false_count,
+        },
+      );
+      return last;
+    },
+    [getLensPost],
+  );
+
+  /**
    * Отримати сповіщення автентифікованого Lens-акаунту
    */
   const getNotifications = useCallback(
@@ -1447,6 +1535,7 @@ export default function useLensPosts(sessionClient = null, getWalletClient = nul
     getCountryPosts,
     getUserPosts,
     getLensPost,
+    getLensPostConfirmed,
     getNotifications,
     getBookmarkedPosts,
     deleteLensPost,
