@@ -1,0 +1,14 @@
+# Human Rights Policy DAO
+
+> A decentralized autonomous organization (DAO) built on the Lens Chain, dedicated to defending and promoting human rights. Members organize collectively to document violations, coordinate advocacy, and support people whose rights are threatened.
+
+Human Rights Policy DAO gives people a place to report human rights violations, request and offer help, discuss governance proposals, and connect with an AI advisor (Atticus) that provides references to constitutional and international human rights law (ECHR, UDHR, ICCPR).
+
+## Site
+
+- [Home](https://hrpdaolens.humanrightsdao.workers.dev/): Login and entry point to the app
+- [Violations](https://hrpdaolens.humanrightsdao.workers.dev/violations): Browse and report human rights violations
+- [Violations Map](https://hrpdaolens.humanrightsdao.workers.dev/violations-map): Geographic map of reported violations
+- [Governance](https://hrpdaolens.humanrightsdao.workers.dev/governance): DAO governance proposals and voting
+- [Terms of Service](https://hrpdaolens.humanrightsdao.workers.dev/terms-of-service): Terms of Service
+- [Privacy Policy](https://hrpdaolens.humanrightsdao.workers.dev/privacy-page): Privacy Policy
