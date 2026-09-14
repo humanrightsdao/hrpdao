@@ -28,7 +28,7 @@ import { useWallets } from "@privy-io/react-auth";
 import { useSetActiveWallet } from "@privy-io/wagmi";
 
 export function usePrivyWalletSync() {
-  const { isConnected } = useAccount();
+  const { isConnected, address, connector } = useAccount();
   const { wallets } = useWallets();
   const { setActiveWallet } = useSetActiveWallet();
   const loggingOutRef = useRef(false);
@@ -71,6 +71,20 @@ export function usePrivyWalletSync() {
   // the user switches accounts in the extension).
   const syncedAddressRef = useRef(null);
 
+  // Purely diagnostic, no side effects — logs wagmi's OWN account state
+  // (from useAccount(), the same hook useDao.js reads) every time it
+  // changes, decoupled from the sync effect below. This is the one
+  // signal we haven't had visibility into: does isConnected/connector
+  // EVER change after setActiveWallet() resolves, or does it stay
+  // frozen indefinitely? If this never logs anything after a
+  // "setActiveWallet(...) resolved OK" below, wagmi's own state isn't
+  // updating at all — a @privy-io/wagmi-level issue, not a timing one.
+  useEffect(() => {
+    console.warn(
+      `[wagmi-state] isConnected=${isConnected} address=${address ?? "none"} connector=${connector?.id ?? "none"}`,
+    );
+  }, [isConnected, address, connector]);
+
   useEffect(() => {
     if (!wallets?.length) {
       console.warn("[wallet-sync] no wallets from useWallets() yet");
@@ -103,19 +117,51 @@ export function usePrivyWalletSync() {
       );
       return; // already asked this wallet to reconnect — just waiting for wagmi's own state to catch up, not a reason to ask again
     }
-    console.warn(`[wallet-sync] calling setActiveWallet(${target.address}), type=${target.walletClientType}`);
+    // ⚠️ FIXED (MetaMask never actually connects — confirmed via console:
+    // [wagmi-state] logged isConnected=false/connector=none exactly ONCE
+    // for the entire session, even after setActiveWallet() logged
+    // "resolved OK" twice — wagmi's account state never moved AT ALL,
+    // not a timing issue. The real smoking gun showed up separately: a
+    // genuine MetaMask RPC error, "Request of type
+    // 'wallet_requestPermissions' already pending", thrown from INSIDE
+    // Privy's own SDK (chunk-2CCHKB4W.js: promptConnection → connect),
+    // while rendering Privy's own AuthenticateWithWalletScreen — i.e.
+    // Privy's OWN internal wallet-connect handshake for the exact same
+    // external wallet was still in flight when this effect saw the
+    // wallet already appear in useWallets() and immediately fired ITS
+    // OWN setActiveWallet() call on top of it. Two independent
+    // wallet_requestPermissions requests to the same MetaMask origin at
+    // once — MetaMask rejects the second, and whichever of the two
+    // "wins" leaves the other side (wagmi's connector, in this case)
+    // never actually updated. A short settling delay before OUR call
+    // gives Privy's own handshake room to finish first instead of
+    // racing it.
+    console.warn(
+      `[wallet-sync] wallet ${target.address} appeared — waiting 900ms before setActiveWallet to avoid racing Privy's own in-flight connection handshake for it`,
+    );
     syncInFlightRef.current = true;
-    setActiveWallet(target)
-      .then(() => {
-        console.warn(`[wallet-sync] setActiveWallet(${target.address}) resolved OK`);
-        syncedAddressRef.current = target.address;
-      })
-      .catch((err) =>
-        console.warn("⚠️ [wallet-sync] setActiveWallet failed:", err),
-      )
-      .finally(() => {
-        syncInFlightRef.current = false;
-      });
+    let cancelled = false;
+    const timeoutId = setTimeout(() => {
+      console.warn(`[wallet-sync] calling setActiveWallet(${target.address}), type=${target.walletClientType}`);
+      setActiveWallet(target)
+        .then(() => {
+          if (cancelled) return;
+          console.warn(`[wallet-sync] setActiveWallet(${target.address}) resolved OK`);
+          syncedAddressRef.current = target.address;
+        })
+        .catch((err) => {
+          if (!cancelled) console.warn("⚠️ [wallet-sync] setActiveWallet failed:", err);
+        })
+        .finally(() => {
+          if (!cancelled) syncInFlightRef.current = false;
+        });
+    }, 900);
+
+    return () => {
+      cancelled = true;
+      clearTimeout(timeoutId);
+      syncInFlightRef.current = false; // the scheduled call never actually fired — safe to release the guard
+    };
   }, [wallets, isConnected, setActiveWallet]);
 
   return loggingOutRef;

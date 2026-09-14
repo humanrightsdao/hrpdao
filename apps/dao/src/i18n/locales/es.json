@@ -1058,6 +1058,7 @@
       "amountPlaceholder": "0.0",
       "max": "MAX",
       "receiveEstimate": "El miembro recibirá ≈{{amount}} Influence por esta propina",
+      "receiveShort": "+{{amount}} Influence",
       "balance": "Saldo:",
       "minimum": "Mínimo:",
       "notEnough": "No hay suficiente {{symbol}} para este monto.",

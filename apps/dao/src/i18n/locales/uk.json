@@ -1014,6 +1014,7 @@
       "amountPlaceholder": "0.0",
       "max": "MAX",
       "receiveEstimate": "Учасник отримає ≈{{amount}} Influence за цей гонорар",
+      "receiveShort": "+{{amount}} Influence",
       "balance": "Баланс:",
       "minimum": "Мінімум:",
       "notEnough": "Недостатньо {{symbol}} для цієї суми.",

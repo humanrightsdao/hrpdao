@@ -1059,6 +1059,7 @@
       "amountPlaceholder": "0.0",
       "max": "MAX",
       "receiveEstimate": "Участник получит ≈{{amount}} Influence за этот донат",
+      "receiveShort": "+{{amount}} Influence",
       "balance": "Баланс:",
       "minimum": "Минимум:",
       "notEnough": "Недостаточно {{symbol}} для этой суммы.",

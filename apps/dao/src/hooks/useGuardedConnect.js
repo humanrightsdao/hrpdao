@@ -117,7 +117,6 @@ export function useGuardedConnect(dao) {
 
   const {
     login,
-    logout: privyLogout,
     ready: privyReady,
     authenticated,
   } = usePrivy();
@@ -163,43 +162,24 @@ export function useGuardedConnect(dao) {
         console.warn(`[connectWallet] silentConnect attempt ${i + 1}/8:`, result.success ? "success" : "failed");
       }
       if (!result.success) {
-        // ⚠️ FIXED (wallet stopped connecting at all — confirmed via
-        // console: wallets.length stayed 0 for the ENTIRE wait, Phase 1
-        // AND Phase 2, "[wallet-sync] calling setActiveWallet(...)"
-        // never once appeared): this isn't the "Privy is just slow"
-        // case from before (there, wallets eventually did appear and
-        // sync succeeded) — here it never can, because the session
-        // itself is stuck. Combined with the earlier-observed
-        // privyLogout() 400 (see this file's other ⚠️ FIXED comments),
-        // the picture is: Privy's CLIENT thinks authenticated=true from
-        // a previous session that was only partially torn down, so the
-        // `if (!authenticated)` branch above never runs login() again —
-        // and calling login() directly while already authenticated
-        // just warns "Attempted to log in, but user is already logged
-        // in. Use a `link` helper instead." with zero effect. There is
-        // no wallet to sync, no matter how long Phase 1/2 wait. A
-        // same-page privyLogout()+login() retry was tried and measured
-        // to be ineffective (the logout call itself 400s, so the
-        // "clean" state it's supposed to produce never happens). The
-        // one thing that reliably breaks this is re-initializing
-        // Privy's SDK from scratch — i.e. reloading the page, which
-        // re-reads whatever is ACTUALLY still valid from
-        // cookies/localStorage instead of trusting the stale in-memory
-        // flag. This mirrors the exact same reload-on-desync pattern
-        // useDao.js already uses for accountsChanged/chainChanged.
+        // ⚠️ TEMPORARILY DISABLED the auto-reload that used to run here.
+        // It was a reasonable idea (see the long history in this file's
+        // other comments) but in practice it turned a diagnosable
+        // problem into an UNDIAGNOSABLE one: every failure triggered an
+        // immediate reload, which wipes the console before anyone can
+        // read or copy the full sequence — so we could never actually
+        // confirm whether isConnected/connector EVER catches up, or
+        // gets stuck forever. Stopping cleanly here instead (just
+        // resetting dao.connecting via the outer finally, no reload) so
+        // the console can be inspected/copied with DevTools' "Preserve
+        // log" enabled. Re-introduce a recovery step once we know what
+        // it actually needs to recover FROM.
         console.warn(
-          "[connectWallet] wallet never synced after extended retries — " +
-            "likely a stuck Privy session (see comment above). Logging out and reloading.",
+          "[connectWallet] wallet never synced after extended retries. " +
+            "Not reloading automatically — check the console above for whether " +
+            "usePrivyWalletSync ever logged 'setActiveWallet(...) resolved OK', " +
+            "and if so, whether wagmi's isConnected ever followed.",
         );
-        try {
-          await privyLogout();
-        } catch (err) {
-          // Expected if the session was already dead server-side (this
-          // is exactly the case that got us here) — reload regardless.
-          console.warn("⚠️ Privy logout before reload failed (session was likely already dead):", err);
-        }
-        window.location.reload();
-        return;
       }
     } finally {
       daoRef.current.setConnecting(false);

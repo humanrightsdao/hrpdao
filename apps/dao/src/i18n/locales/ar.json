@@ -1058,6 +1058,7 @@
       "amountPlaceholder": "0.0",
       "max": "الحد الأقصى",
       "receiveEstimate": "سيحصل العضو على ما يقارب {{amount}} Influence مقابل هذه الإكرامية",
+      "receiveShort": "+{{amount}} Influence",
       "balance": "الرصيد:",
       "minimum": "الحد الأدنى:",
       "notEnough": "لا يوجد رصيد كافٍ من {{symbol}} لهذا المبلغ.",

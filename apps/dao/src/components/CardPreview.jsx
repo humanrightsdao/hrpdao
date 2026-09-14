@@ -64,6 +64,36 @@ export default function CardPreview({ address, showFooterNote = true, loggingOut
   const viewerAddress = dao.account;
   const connectWallet = useGuardedConnect(dao);
   const disconnectWallet = useGuardedDisconnect(dao, loggingOutRef);
+
+  // ⚠️ FIXED (reload looked like a disconnect on THIS page): useDao's own
+  // silentConnect()-on-mount effect only ever fires ONCE, at the very first
+  // render — almost always before usePrivyWalletSync has finished linking
+  // an already-authorized Privy session into wagmi (that sync has a
+  // deliberate ~900ms settling delay plus retries, see
+  // usePrivyWalletSync.js). So right after a reload, dao.account is briefly
+  // (or, without this effect, PERMANENTLY) null and the donate button
+  // falls back to "Підключити гаманець" — even though the person never
+  // actually logged out and the exact same wallet is about to sync back in
+  // a moment later. Layout.jsx already has this exact fix (see its own
+  // comment for the full history: "useDao's own silentConnect()-on-mount
+  // effect only fires once... re-running silentConnect() whenever wagmi's
+  // connector actually becomes available") — but CardPreview sits OUTSIDE
+  // Layout (see CardPublicPage.jsx) and calls useDao() on its own, so it
+  // never got the same follow-up effect. Depending on `dao.silentConnect`
+  // itself (a useCallback whose identity changes the moment wagmi's active
+  // connector changes) re-runs this the instant a wallet actually becomes
+  // available, instead of only once, before that: a reload restores the
+  // SAME session instead of visually looking like a logout. A genuine
+  // logout is only ever "Змінити гаманець" (useGuardedDisconnect above),
+  // which is now reachable in every case, including tipping yourself — see
+  // the isSelf fix below — so there's no longer any scenario that needs
+  // reload to double as a disconnect.
+  useEffect(() => {
+    if (!dao.isConnected && !dao.connecting) {
+      dao.silentConnect();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dao.silentConnect]);
   const [selectedToken, setSelectedToken] = useState(TIP_TOKENS[0] || null);
   const [amount, setAmount] = useState(PRESET_AMOUNTS[0]);
   const [tokenInfo, setTokenInfo] = useState(null);
@@ -521,31 +551,49 @@ export default function CardPreview({ address, showFooterNote = true, loggingOut
                 ))}
               </div>
 
-              {/* Preview of the Influence earned from this tip */}
-              {previewRightsAmount !== null && (
-                <p className="text-[11px] font-mono text-verdigrisBright">
-                  {t("dao.card.receiveEstimate", { amount: fmtNum(previewRightsAmount) })}
-                </p>
-              )}
-
-              {tokenInfo && (
-                <p className="text-[11px] font-mono text-parchmentDim leading-relaxed">
-                  {viewerAddress ? (
-                    <>
-                      {t("dao.card.balance")}{" "}
-                      <span
-                        className={overBalance ? "text-sealBright font-medium" : "text-parchment"}
-                      >
-                        {bal.toFixed(2)} {tokenInfo.symbol}
-                      </span>
-                      {" · "}
-                    </>
-                  ) : null}
-                  {t("dao.card.minimum")}{" "}
-                  <span className="text-parchment">
-                    {tokenInfo.minAmountFormatted} {tokenInfo.symbol}
-                  </span>
-                </p>
+              {/* Compact info strip: was two separate paragraphs
+                  ("Учасник отримає ≈X Influence за цей гонорар" +
+                  "Баланс: X · Мінімум: Y") stacked on their own lines —
+                  a lot of text/height for a business-card-sized widget.
+                  Merged into ONE thin row: the Influence estimate (short
+                  form, "+X Influence" — the long form is still used
+                  as-is in the "Карткою" tab, which has more room) on the
+                  left, and balance/minimum as a single compact
+                  "current / minimum SYMBOL" ratio on the right — the
+                  same "0.00 / 1.0" shorthand common in wallet UIs, no
+                  "Баланс:"/"Мінімум:" labels needed since the input
+                  field they sit under makes the meaning obvious. Falls
+                  back to justify-end when there's no Influence preview
+                  yet (e.g. amount is empty) so the balance/min side
+                  doesn't jump around. */}
+              {(previewRightsAmount !== null || tokenInfo) && (
+                <div
+                  className={`flex items-center gap-2 text-[10px] font-mono text-parchmentDim ${
+                    previewRightsAmount !== null ? "justify-between" : "justify-end"
+                  }`}
+                >
+                  {previewRightsAmount !== null && (
+                    <span className="text-verdigrisBright whitespace-nowrap">
+                      {t("dao.card.receiveShort", { amount: fmtNum(previewRightsAmount) })}
+                    </span>
+                  )}
+                  {tokenInfo && (
+                    <span className="whitespace-nowrap">
+                      {viewerAddress && (
+                        <>
+                          <span
+                            className={overBalance ? "text-sealBright font-medium" : "text-parchment"}
+                          >
+                            {bal.toFixed(2)}
+                          </span>
+                          {" / "}
+                        </>
+                      )}
+                      <span className="text-parchment">{tokenInfo.minAmountFormatted}</span>{" "}
+                      {tokenInfo.symbol}
+                    </span>
+                  )}
+                </div>
               )}
               {/* "Not enough balance" is already shown on the Send button
                   itself (dao.card.notEnoughShort) once disabled — a
@@ -569,12 +617,16 @@ export default function CardPreview({ address, showFooterNote = true, loggingOut
               )}
 
               {/* Send button */}
-              {/* Once a wallet is connected (and it isn't the card owner's
-                  own), confirm right above the button which address will
-                  actually sign/pay — was previously shown up near the
-                  currency selector, moved here so it's tied to the action
-                  it describes. */}
-              {viewerAddress && !isSelf && (
+              {/* Once a wallet is connected, confirm right above the button
+                  which address will actually sign/pay — was previously
+                  shown up near the currency selector, moved here so it's
+                  tied to the action it describes. Shown regardless of
+                  isSelf: tipping yourself needs "Змінити гаманець" just as
+                  much as tipping someone else does, and it's now the ONLY
+                  real logout path (reload no longer clears the session —
+                  see the effect above), so hiding it here would leave
+                  self-tip testing with no way to switch wallets at all. */}
+              {viewerAddress && (
                 <p className="text-center font-mono text-[10px] text-parchmentDim -mb-1">
                   {t("dao.card.connectedAs", { address: truncAddr(viewerAddress) })}
                   {" · "}

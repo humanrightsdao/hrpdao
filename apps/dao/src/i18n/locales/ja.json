@@ -1058,6 +1058,7 @@
       "amountPlaceholder": "0.0",
       "max": "最大",
       "receiveEstimate": "メンバーはこのチップに対して約{{amount}} Influenceを受け取ります",
+      "receiveShort": "+{{amount}} Influence",
       "balance": "残高：",
       "minimum": "最小値：",
       "notEnough": "この金額には {{symbol}} が不足しています。",

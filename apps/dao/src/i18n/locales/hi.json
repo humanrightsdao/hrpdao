@@ -1058,6 +1058,7 @@
       "amountPlaceholder": "0.0",
       "max": "अधिकतम",
       "receiveEstimate": "सदस्य को इस टिप के लिए ≈{{amount}} Influence प्राप्त होगी",
+      "receiveShort": "+{{amount}} Influence",
       "balance": "शेष राशि:",
       "minimum": "न्यूनतम:",
       "notEnough": "इस राशि के लिए पर्याप्त {{symbol}} नहीं है।",

@@ -1058,6 +1058,7 @@
       "amountPlaceholder": "0.0",
       "max": "MAX",
       "receiveEstimate": "Le membre recevra ≈{{amount}} Influence pour ce pourboire",
+      "receiveShort": "+{{amount}} Influence",
       "balance": "Solde :",
       "minimum": "Minimum :",
       "notEnough": "Pas assez de {{symbol}} pour ce montant.",

@@ -1058,6 +1058,7 @@
       "amountPlaceholder": "0.0",
       "max": "MAX",
       "receiveEstimate": "Das Mitglied erhält ≈{{amount}} Influence für dieses Trinkgeld",
+      "receiveShort": "+{{amount}} Influence",
       "balance": "Guthaben:",
       "minimum": "Minimum:",
       "notEnough": "Nicht genug {{symbol}} für diesen Betrag.",

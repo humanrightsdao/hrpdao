@@ -1062,6 +1062,7 @@
       "amountPlaceholder": "0.0",
       "max": "MAX",
       "receiveEstimate": "The member will receive ≈{{amount}} Influence for this tip",
+      "receiveShort": "+{{amount}} Influence",
       "balance": "Balance:",
       "minimum": "Minimum:",
       "notEnough": "Not enough {{symbol}} for this amount.",

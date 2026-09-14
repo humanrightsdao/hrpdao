@@ -1058,6 +1058,7 @@
       "amountPlaceholder": "0.0",
       "max": "最大",
       "receiveEstimate": "该成员将因此次打赏获得约 {{amount}} Influence",
+      "receiveShort": "+{{amount}} Influence",
       "balance": "余额：",
       "minimum": "最低：",
       "notEnough": "{{symbol}} 余额不足以支付此金额。",

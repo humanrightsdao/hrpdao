@@ -1058,6 +1058,7 @@
       "amountPlaceholder": "0.0",
       "max": "MAX",
       "receiveEstimate": "O membro receberá ≈{{amount}} Influence por esta gorjeta",
+      "receiveShort": "+{{amount}} Influence",
       "balance": "Saldo:",
       "minimum": "Mínimo:",
       "notEnough": "{{symbol}} insuficiente para este valor.",
