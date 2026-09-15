@@ -193,7 +193,7 @@ ReactDOM.createRoot(document.getElementById("root")).render(
             {/* Public page with no sidebar — this is exactly where the
                 Business Card's QR code leads, meant to be viewed
                 without connecting one's own wallet (offline scenario). */}
-            <Route path="/card/:address" element={<CardPublicPage />} />
+            <Route path="/card/:id" element={<CardPublicPage />} />
           </Routes>
         </BrowserRouter>
         </NostrIdentityProvider>

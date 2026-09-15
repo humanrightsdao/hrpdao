@@ -2,6 +2,14 @@ import { useEffect, useState } from "react";
 import { resolveIdentity } from "../lib/identity";
 import { truncAddr } from "../lib/format";
 
+// On the Business Card itself we deliberately show the real, truncated
+// "0x485A…5b99" address (not the base58 public code from publicId.js) —
+// it's immediately recognisable as a wallet, which builds trust, and
+// being truncated it still can't be pasted anywhere as a valid full
+// address, so it doesn't reopen the "send funds directly" risk. The
+// public code is reserved for the /card/:id link and QR only (see
+// identity.js's buildPublicCardId/resolveAddressFromPublicId + this
+// page's own use of Identity in CardPreview.jsx).
 export function useIdentity(address) {
   const [identity, setIdentity] = useState(() =>
     address ? { source: null, display: truncAddr(address), loading: true } : null,

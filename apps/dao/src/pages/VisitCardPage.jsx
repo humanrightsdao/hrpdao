@@ -4,6 +4,7 @@ import { useTranslation } from "react-i18next";
 import QRCode from "qrcode";
 import { IdCard, Download } from "lucide-react";
 import CardPreview from "../components/CardPreview";
+import { buildPublicCardId } from "../lib/identity";
 
 export default function VisitCardPage() {
   const { t } = useTranslation();
@@ -15,23 +16,39 @@ export default function VisitCardPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dao.account]);
 
-  // The QR code leads to the public /card/:address page — anyone can
-  // open it offline (by scanning the code from a phone/printout),
-  // without connecting their own wallet, and see this address's
-  // membership status.
+  // The QR code leads to the public /card/:id page — anyone can open it
+  // offline (by scanning the code from a phone/printout), without
+  // connecting their own wallet, and see this address's membership
+  // status. `:id` is deliberately NOT the raw address whenever something
+  // better is available (ENS name / Lens handle via buildPublicCardId(),
+  // else a base58 "public code" from publicId.js) — a raw "0x..." link
+  // invites a visitor to just send funds to it directly, completely
+  // bypassing TipJar's author/pool split. CardPublicPage.jsx reverses
+  // this via resolveAddressFromPublicId().
   useEffect(() => {
     if (!dao.account) {
       setQrDataUrl(null);
       return;
     }
-    const url = `${window.location.origin}/card/${dao.account}`;
-    QRCode.toDataURL(url, {
-      width: 320,
-      margin: 1,
-      color: { dark: "#0A0F16", light: "#F4F2ED" },
-    })
-      .then(setQrDataUrl)
-      .catch(() => setQrDataUrl(null));
+    let cancelled = false;
+    buildPublicCardId(dao.account).then((id) => {
+      if (cancelled || !id) return;
+      const url = `${window.location.origin}/card/${id}`;
+      QRCode.toDataURL(url, {
+        width: 320,
+        margin: 1,
+        color: { dark: "#0A0F16", light: "#F4F2ED" },
+      })
+        .then((dataUrl) => {
+          if (!cancelled) setQrDataUrl(dataUrl);
+        })
+        .catch(() => {
+          if (!cancelled) setQrDataUrl(null);
+        });
+    });
+    return () => {
+      cancelled = true;
+    };
   }, [dao.account]);
 
   function downloadQR() {
