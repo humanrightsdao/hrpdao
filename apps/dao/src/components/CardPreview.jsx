@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { ethers } from "ethers";
 import { Loader2 } from "lucide-react";
-import { CONTRACTS, ACTIVE_CHAIN, useDao } from "../hooks/useDao";
+import { CONTRACTS, ACTIVE_CHAIN } from "../hooks/useDao";
 import { useGuardedConnect } from "../hooks/useGuardedConnect";
 import { useGuardedDisconnect } from "../hooks/useGuardedDisconnect";
 import { useTipJar } from "../hooks/useTipJar";
@@ -35,32 +35,47 @@ const TIP_TOKENS = [
 
 const PRESET_AMOUNTS = ["5", "10", "25"];
 
-// A self-contained "business card" block — it reads status from the
-// blockchain by address itself, with no props besides address. Used
-// in two places:
-// 1) the public /card/:address page (where the QR code leads, full
-//    layout) — someone who scanned the code immediately sees the
-//    status and can send the member a tip without leaving this page;
-// 2) the private Business Card page — embedded next to the QR code,
-//    an exact preview of what someone scanning the code will see
-//    (so the tip form renders the same way here, just with the send
-//    button disabled — you can't tip yourself).
-export default function CardPreview({ address, showFooterNote = true, loggingOutRef }) {
+// A self-contained "business card" block — reads status from the
+// blockchain by address itself. `dao` is passed in by the caller (see
+// below) rather than created here, since this is used in two very
+// different places:
+// 1) CardPublicPage.jsx — the public /card/:id page, where the QR code
+//    leads. No wallet is connected yet when a stranger opens it, so
+//    CardPublicPage creates ONE fresh useDao() instance just for this
+//    page and hands it down.
+// 2) VisitCardPage.jsx — the OWNER's own private preview, embedded next
+//    to the QR code, next to the Layout-wide connected session.
+//
+// ⚠️ FIXED: this component used to call useDao() ITSELF, unconditionally
+// — harmless on CardPublicPage (nothing else on that route touches a
+// wallet), but on VisitCardPage that meant TWO separate, independent
+// useDao() instances were alive on the same page at once: Layout's own
+// (already connected — that's how you got here at all) and this
+// component's second, freshly-created one, both trying to
+// silentConnect()/switch chain/register accountsChanged+chainChanged
+// listeners against the SAME underlying wallet connector at the same
+// time. For a real browser-extension wallet (MetaMask etc.) the
+// redundant second attempt mostly just no-ops quietly. For a Privy
+// EMBEDDED wallet (email/Google login) it doesn't: two concurrent
+// chain-switch/listener-registration cycles against the same embedded
+// provider made it spuriously fire "accountsChanged"/"chainChanged" —
+// and this app calls window.location.reload() on those (see useDao.js)
+// — so the page reloaded, which reran the exact same race, forever.
+// That's exactly why the bug only ever showed up on the INTERNAL
+// Business Card page (the only place two dao instances coexisted) and
+// only for Google/email logins (the only wallet type sensitive to the
+// redundant concurrent calls) — external visitors and MetaMask users
+// never hit it. Removing CardPreview's own useDao() call and requiring
+// the caller to supply one closes the gap structurally: there is now
+// only ever ONE dao instance per route, same as everywhere else in the
+// app (see Layout.jsx / useOutletContext()).
+export default function CardPreview({ address, dao, showFooterNote = true, loggingOutRef }) {
   const { t } = useTranslation();
   const [status, setStatus] = useState(null); // null = loading, false = error
   const isValidAddress = address && ethers.isAddress(address);
 
   // ── Tip ────────────────────────────────────────────────────
   const tipJar = useTipJar();
-  // useDao() rather than wagmi's bare useAccount(): sending a tip is a
-  // real signed transaction, so this page needs the SAME guarded
-  // connect flow (Privy login, chain add/switch, contract refs) the
-  // rest of the app uses — not just a passive read of whichever
-  // address happens to already be connected. This route sits OUTSIDE
-  // Layout (see CardPublicPage.jsx), so it's the one place besides
-  // Layout itself that calls useDao() directly rather than reading it
-  // via useOutletContext().
-  const dao = useDao();
   const viewerAddress = dao.account;
   const connectWallet = useGuardedConnect(dao);
   const disconnectWallet = useGuardedDisconnect(dao, loggingOutRef);
@@ -74,20 +89,13 @@ export default function CardPreview({ address, showFooterNote = true, loggingOut
   // (or, without this effect, PERMANENTLY) null and the donate button
   // falls back to "Підключити гаманець" — even though the person never
   // actually logged out and the exact same wallet is about to sync back in
-  // a moment later. Layout.jsx already has this exact fix (see its own
-  // comment for the full history: "useDao's own silentConnect()-on-mount
-  // effect only fires once... re-running silentConnect() whenever wagmi's
-  // connector actually becomes available") — but CardPreview sits OUTSIDE
-  // Layout (see CardPublicPage.jsx) and calls useDao() on its own, so it
-  // never got the same follow-up effect. Depending on `dao.silentConnect`
-  // itself (a useCallback whose identity changes the moment wagmi's active
-  // connector changes) re-runs this the instant a wallet actually becomes
-  // available, instead of only once, before that: a reload restores the
-  // SAME session instead of visually looking like a logout. A genuine
-  // logout is only ever "Змінити гаманець" (useGuardedDisconnect above),
-  // which is now reachable in every case, including tipping yourself — see
-  // the isSelf fix below — so there's no longer any scenario that needs
-  // reload to double as a disconnect.
+  // a moment later. Layout.jsx already has this exact fix for its OWN dao
+  // instance — this effect is that same fix for the case where CardPreview
+  // owns ITS OWN, separate dao instance (CardPublicPage). When `dao` is
+  // instead Layout's shared instance (VisitCardPage), Layout is already
+  // running this exact effect, so re-running it here too would just be
+  // the same redundant-instance problem described above in miniature —
+  // this guards against that by no-opping once `viewerAddress` is set.
   useEffect(() => {
     if (!dao.isConnected && !dao.connecting) {
       dao.silentConnect();

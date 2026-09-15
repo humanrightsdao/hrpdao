@@ -30,7 +30,7 @@ const resolvePicture = (picture) => {
 
 // Same approach as fetchAllLensAccountsForOwner in hrpdaolens
 // (useLensProfile.js) — finds all Lens Accounts an EOA address
-// manages/owns. We take the first one found as the "primary".
+// manages/owns.
 export async function lookupLensByAddress(ownerAddress) {
   if (!ownerAddress) return null;
   try {
@@ -40,8 +40,25 @@ export async function lookupLensByAddress(ownerAddress) {
     });
     if (result.isErr()) return null;
 
-    const first = (result.value.items || []).map((item) => item.account).filter(Boolean)[0];
-    if (!first) return null;
+    const items = (result.value.items || []).map((item) => item.account).filter(Boolean);
+    if (items.length === 0) return null;
+
+    // ⚠️ FIXED: one wallet can manage/own MORE THAN ONE Lens Account —
+    // dossier's own useLensProfile.js hit this exact issue and already
+    // documents it (see its comment there): naively taking items[0] can
+    // land on an empty, un-named "default" account while the person's
+    // actual, named account sits later in the list. dossier works
+    // around this with a per-browser localStorage preference
+    // (`lens_account_address`) recording which account the person
+    // picked — but that's dossier's OWN origin's storage, invisible
+    // here (this app is a different domain), and there's no
+    // cross-app "default account" field the Lens API exposes either.
+    // The safe, universal fix that needs no shared state at all: never
+    // prefer a nameless account over a named one. A visitor who already
+    // set up a name/username in dossier will now show it here too,
+    // instead of this picking whichever empty account happened to
+    // come first in the API's response order.
+    const first = items.find((a) => a.metadata?.name || a.username?.localName) || items[0];
 
     return {
       source: "lens",

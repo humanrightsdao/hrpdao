@@ -3,6 +3,7 @@ import { useParams } from "react-router-dom";
 import { Loader2 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import CardPreview from "../components/CardPreview";
+import { useDao } from "../hooks/useDao";
 import { usePrivyWalletSync } from "../hooks/usePrivyWalletSync";
 import { resolveAddressFromPublicId } from "../lib/identity";
 
@@ -29,6 +30,10 @@ export default function CardPublicPage() {
   const { t } = useTranslation();
   const { id } = useParams();
   const loggingOutRef = usePrivyWalletSync();
+  // The ONE dao instance for this whole route — see CardPreview.jsx's own
+  // top comment for why it no longer creates this itself: exactly one
+  // useDao() per route, same rule Layout.jsx follows for every other page.
+  const dao = useDao();
 
   // The :id route param is no longer necessarily a raw address — it can
   // now be an ENS name, a Lens handle, or one of our own base58 "public
@@ -65,7 +70,7 @@ export default function CardPublicPage() {
             {t("dao.card.invalidAddress")}
           </p>
         ) : (
-          <CardPreview address={address} loggingOutRef={loggingOutRef} />
+          <CardPreview address={address} dao={dao} loggingOutRef={loggingOutRef} />
         )}
       </div>
     </div>

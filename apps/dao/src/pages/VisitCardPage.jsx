@@ -117,7 +117,18 @@ export default function VisitCardPage() {
 
         <div className="rounded-2xl border border-hairline p-6 sm:p-8 relative overflow-hidden">
           <div className="gradient-orb w-40 h-40 bg-verdigris/15 -top-10 -right-10" aria-hidden />
-          <CardPreview address={dao.account} showFooterNote={false} />
+          {/* Same `dao` instance this whole page already uses (from
+              Layout, via useOutletContext above) — NOT a second one.
+              CardPreview used to create its own internally, which on
+              this specific page (the only one where a Business Card
+              preview sits inside an already-connected Layout session)
+              caused two competing wallet-connect cycles on the same
+              provider — harmless for MetaMask, but it made Google/email
+              (Privy embedded wallet) logins spuriously fire
+              accountsChanged/chainChanged, which triggers
+              window.location.reload() — hence the "page just keeps
+              reloading" bug. See CardPreview.jsx's top comment. */}
+          <CardPreview address={dao.account} dao={dao} showFooterNote={false} />
         </div>
       </div>
     </div>
