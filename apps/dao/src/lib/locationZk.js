@@ -117,6 +117,7 @@ export async function getBrowserPosition(onProgress) {
     if (firstErr?.code === 1) {
       throw new Error(
         "Geolocation access was denied by the browser. Allow geolocation for this site in your browser settings and try again.",
+        { cause: firstErr },
       );
     }
     onProgress?.(
@@ -132,11 +133,13 @@ export async function getBrowserPosition(onProgress) {
       if (secondErr?.code === 3) {
         throw new Error(
           "Failed to determine location in 42 seconds (both GPS and network geolocation timed out). Try again, ideally outdoors or with Wi-Fi enabled.",
+          { cause: secondErr },
         );
       }
       if (secondErr?.code === 2) {
         throw new Error(
           "Position unavailable — check that geolocation is enabled in your OS/browser settings.",
+          { cause: secondErr },
         );
       }
       throw secondErr;

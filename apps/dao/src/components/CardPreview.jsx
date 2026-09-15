@@ -179,7 +179,6 @@ export default function CardPreview({ address, showFooterNote = true, loggingOut
     if (res.success) {
       setTipStatus(t("dao.card.tipSentSuccess"));
     } else {
-      // eslint-disable-next-line no-console
       console.error("[CardPreview] sendTip failed:", res.error);
       setTipStatus(
         res.error === "Cannot tip your own post"
@@ -288,7 +287,6 @@ export default function CardPreview({ address, showFooterNote = true, loggingOut
     if (res.success) {
       setCardFlowMessage(t("dao.card.tipSentSuccess"));
     } else {
-      // eslint-disable-next-line no-console
       console.error("[CardPreview] handlePayWithCard sendTip failed:", res.error);
       setCardFlowMessage(`✗ ${tDaoMessage(t, res.error)}`);
     }

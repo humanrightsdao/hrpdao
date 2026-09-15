@@ -39,7 +39,6 @@ export default function AtticusChat({ open, onClose }) {
     setMessages((m) =>
       m.length === 1 && m[0].role === "atticus" ? [WELCOME_MESSAGE] : m,
     );
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [WELCOME_MESSAGE]);
 
   useEffect(() => {
