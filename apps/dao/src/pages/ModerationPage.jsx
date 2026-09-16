@@ -33,6 +33,22 @@ export default function ModerationPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dao.account]);
 
+  // Deep link from the forum's own moderation queue
+  // (ForumModerationPage.jsx's "Escalate to Sanction" button):
+  // ?target=<offender address>&evidence=<nostr event id>. Same idea as
+  // the existing ?case= deep link below, just prefilling a NEW proposal
+  // instead of highlighting an existing one — opens the form directly
+  // instead of making the person retype an address and go find the
+  // Nostr event id themselves.
+  useEffect(() => {
+    const target = searchParams.get("target");
+    const evidence = searchParams.get("evidence");
+    if (target) setTargetAddress(target);
+    if (evidence) setEvidenceRef(evidence);
+    if (target || evidence) setShowForm(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   // If we arrived via a "View in DAO" deep link from Dossier
   // (?case=<id>), make sure the create-form isn't in the way — a deep
   // link means someone is here to look at an EXISTING case, not create

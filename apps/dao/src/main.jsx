@@ -27,6 +27,7 @@ import RankingPage from "./pages/RankingPage";
 import DocsPage from "./pages/DocsPage";
 import ForumPage from "./pages/ForumPage";
 import ForumThreadPage from "./pages/ForumThreadPage";
+import ForumModerationPage from "./pages/ForumModerationPage";
 import AboutPage from "./pages/AboutPage";
 import PrivacyPage from "./pages/PrivacyPage";
 import TermsPage from "./pages/TermsPage";
@@ -181,6 +182,7 @@ ReactDOM.createRoot(document.getElementById("root")).render(
               <Route path="ranking" element={<RankingPage />} />
               <Route path="docs" element={<DocsPage />} />
               <Route path="forum" element={<ForumPage />} />
+              <Route path="forum/moderation" element={<ForumModerationPage />} />
               <Route path="forum/:id" element={<ForumThreadPage />} />
               {/* Same pattern as dossier's /about, /terms, /privacy — see
                   its main.jsx for the equivalent routes. Kept inside the

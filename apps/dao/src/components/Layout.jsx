@@ -16,6 +16,7 @@ import {
   ChevronDown,
   Menu,
   X,
+  Flag,
 } from "lucide-react";
 import { useState, useEffect } from "react";
 import { usePrivy } from "@privy-io/react-auth";
@@ -67,6 +68,7 @@ const NAV_GROUPS = [
     items: [
       { to: "/proposals", labelKey: "proposals", icon: Vote },
       { to: "/moderation", labelKey: "moderation", icon: ShieldAlert },
+      { to: "/forum/moderation", labelKey: "forumModeration", icon: Flag },
       { to: "/treasury", labelKey: "treasury", icon: Landmark },
       { to: "/params", labelKey: "params", icon: Settings2 },
     ],

@@ -17,11 +17,19 @@
 // RIGHTS — звичайне ціле число (як currentRights() у RightsRegistry), НЕ
 // 18-decimal fixed-point — previewRights() нижче повертає Number напряму.
 //
-// ⚠️ ЗМІНА: цей деплой має ЛИШЕ ОДИН тестовий токен (tUSD, 6 decimals) —
-// не два (tGHO+tUSDC), як було в попередній версії. DEFAULT_TIP_TOKEN
-// вказує саме на нього. Якщо DAO пізніше додасть другий токен через
-// TipJar.setAcceptedToken(), досить дописати його адресу в .env — код
-// нижче не хардкодить кількість токенів.
+// ⚠️ СИНХРОНІЗОВАНО з dao-app (src/hooks/useTipJar.js там): той самий
+// TipJar-деплой, що й в dao — DEFAULT_TIP_TOKEN далі вказує на tUSD,
+// але цей деплой приймає ДВА токени (tUSD, mintable-мок, + справжній
+// Sepolia USDC), не один. Другий токен додається на рівні компонента
+// (TipButton.jsx фільтрує список валют за реально заданими в .env
+// адресами), а не тут — код нижче так само не хардкодить їх кількість.
+//
+// ⚠️ ПЕРЕЙМЕНУВАННЯ ончейн-функції (лише технічне, сенс не змінився): цей
+// деплой контракту називає read-функцію previewInfluence(), а не
+// previewRights() як у попередній версії dossier. Щоб не чіпати виклики
+// з TipButton.jsx (де все лишається "RIGHTS" — це бренд самого dossier,
+// не змінюється), локальна назва previewRights нижче залишена, змінився
+// лише рядок ABI й сам виклик контракту (так само зроблено в dao).
 
 import { useState, useCallback, useRef } from "react";
 import { ethers } from "ethers";
@@ -57,8 +65,8 @@ const TIPJAR_ABI = [
   "function acceptedTokens(address token) external view returns (bool)",
   "function minTipAmount(address token) external view returns (uint256)",
   "function previewSplit(address author) external view returns (uint256 bps, string memory tier)",
-  "function previewRights(address token, uint256 amount) external view returns (uint256)",
-  "event TipSent(address indexed from, address indexed author, address indexed token, uint256 totalAmount, uint256 authorAmount, uint256 poolAmount, uint256 rightsAwarded, bytes32 postRef)",
+  "function previewInfluence(address token, uint256 amount) external view returns (uint256)",
+  "event TipSent(address indexed from, address indexed author, address indexed token, uint256 receivedAmount, uint256 authorAmount, uint256 poolAmount, uint256 influenceAwarded, bytes32 postRef)",
 ];
 
 const ERC20_ABI = [
@@ -202,7 +210,12 @@ export function useTipJar() {
         );
         const decimals = Number(await tokenRead.decimals());
         const amount = ethers.parseUnits(String(amountHuman || "0"), decimals);
-        const rightsAmount = await tipJarReadRef.current.previewRights(
+        // ⚠️ Контракт цього деплою називає цю read-функцію previewInfluence()
+        // (перейменовано разом із рештою переходу на InfluenceRegistry на
+        // стороні dao — див. коментар угорі файлу). Локальна назва
+        // previewRights тут і в поверненому об'єкті хука лишається, щоб не
+        // чіпати виклики з TipButton.jsx.
+        const rightsAmount = await tipJarReadRef.current.previewInfluence(
           addr,
           amount,
         );

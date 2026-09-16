@@ -73,6 +73,16 @@ const MESSAGE_KEYS = {
   "Failed to publish the thread.": "dao.errors.forumPublishThreadFailed",
   "No relay accepted the reply.": "dao.errors.forumNoRelayReply",
   "Failed to publish the reply.": "dao.errors.forumPublishReplyFailed",
+  // Membership gate (canPostToForum) + report button
+  "Connect your wallet to post": "dao.errors.forumConnectToPost",
+  "An active SHIELD or COUNCIL token is required to post on the forum":
+    "dao.errors.forumShieldOrCouncilRequired",
+  "Posting is suspended while an active sanction restricts your rights":
+    "dao.errors.forumPostingSuspended",
+  "No relay accepted the report.": "dao.errors.forumNoRelayReport",
+  "Failed to publish the report.": "dao.errors.forumPublishReportFailed",
+  "No relay accepted the moderation action.": "dao.errors.forumNoRelayModAction",
+  "Failed to publish the moderation action.": "dao.errors.forumPublishModActionFailed",
 
   // ── lib/locationZk.js ────────────────────────────────────────────
   "Geolocation isn't supported by this browser.": "dao.errors.geoUnsupported",

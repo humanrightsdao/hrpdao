@@ -1601,6 +1601,43 @@ export function useDao() {
     return { eligible: true, reason: null };
   }, [hasShield, hasCouncil, isRestricted, shieldInfo]);
 
+  // ── Forum membership gate ─────────────────────────────────
+  // Same eligibility rule as canProposeSanction() above, on purpose: an
+  // active Shield/Council token, not currently under an active
+  // sanction's restriction, and having accepted the current Human
+  // Rights Policy. This is the fix for the forum having had NO
+  // membership check at all — any wallet, including one with zero DAO
+  // history, could publish threads/replies straight to the public
+  // Nostr relays this forum reads from. Since those relays don't
+  // reliably support deletion (see useForum.js), keeping unvetted
+  // wallets from posting in the first place matters far more here than
+  // in a system where a bad post can just be taken down afterwards.
+  const canPostToForum = useCallback(() => {
+    if (!account) {
+      return { eligible: false, reason: "Connect your wallet to post" };
+    }
+    if (!hasShield && !hasCouncil) {
+      return {
+        eligible: false,
+        reason: "An active SHIELD or COUNCIL token is required to post on the forum",
+      };
+    }
+    if (isRestricted) {
+      return {
+        eligible: false,
+        reason: "Posting is suspended while an active sanction restricts your rights",
+      };
+    }
+    if (shieldInfo && !shieldInfo.hasAcceptedPolicy) {
+      return {
+        eligible: false,
+        reason:
+          "You must first accept the current Human Rights Policy (ShieldSBT.acceptPolicy)",
+      };
+    }
+    return { eligible: true, reason: null };
+  }, [account, hasShield, hasCouncil, isRestricted, shieldInfo]);
+
   /**
    * @param targetAddress    The address of the post's author (the offender)
    * @param lensPostId       The Lens post ID string - hashed internally
@@ -3203,5 +3240,7 @@ export function useDao() {
     finalizeSanctionShieldVote,
     executeSanction,
     getSanctionProposal,
+    // Forum membership gate
+    canPostToForum,
   };
 }

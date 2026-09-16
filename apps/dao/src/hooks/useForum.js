@@ -1,5 +1,4 @@
 import { useState, useCallback } from "react";
-import { useAccount } from "wagmi";
 import { pool, RELAYS, publishEvent } from "../lib/nostrLookup";
 import { useNostrIdentity } from "./useNostrIdentity";
 
@@ -31,7 +30,7 @@ import { useNostrIdentity } from "./useNostrIdentity";
 // reliably support deletion, so a fresh tag is the practical way to
 // stop querying them. They still physically exist on the relays under
 // "hrp-forum" — this only changes what THIS app queries/publishes.
-const FORUM_TAG = "hrpdao-forum";
+export const FORUM_TAG = "hrpdao-forum";
 
 function parseThread(ev) {
   const subjectTag = ev.tags.find((t) => t[0] === "subject");
@@ -59,7 +58,33 @@ function parseReply(ev) {
   };
 }
 
-export function useForum() {
+// ── Report events (NIP-56) ───────────────────────────────────────
+// A standard Nostr "reporting" event (kind:1984) rather than a made-up
+// tag scheme — any NIP-56-aware Nostr client/relay tooling can already
+// read these, not just this app. The small, fixed NIP-56 `report-type`
+// vocabulary (nudity/malware/profanity/illegal/spam/impersonation/
+// other) doesn't have a slot for every category we want to offer in
+// the UI, so each of OUR categories maps to the closest NIP-56 type
+// for the tag (interoperability), while the exact category the person
+// actually picked is kept, verbatim, in the event's own `content` as
+// JSON (for our own moderation queue to read precisely).
+export const FORUM_REPORT_TAG = `${FORUM_TAG}-report`;
+
+export const FORUM_REPORT_CATEGORIES = [
+  { value: "hate_speech", nip56: "other" },
+  { value: "violence_incitement", nip56: "illegal" },
+  { value: "harassment", nip56: "profanity" },
+  { value: "csam_or_minors", nip56: "illegal" },
+  { value: "misinformation", nip56: "other" },
+  { value: "spam", nip56: "spam" },
+  { value: "other", nip56: "other" },
+];
+
+function nip56TypeFor(category) {
+  return FORUM_REPORT_CATEGORIES.find((c) => c.value === category)?.nip56 || "other";
+}
+
+export function useForum(dao) {
   const [threads, setThreads] = useState([]);
   const [loadingThreads, setLoadingThreads] = useState(false);
   const [error, setError] = useState(null);
@@ -67,7 +92,13 @@ export function useForum() {
   // identity as Dossier's, instead of an unrelated random local key.
   // See useNostrIdentity.jsx for why.
   const { getSignerPubkey, signEvent } = useNostrIdentity();
-  const { address } = useAccount();
+  // `dao.account` rather than wagmi's own useAccount(): this hook now
+  // needs dao.canPostToForum() too (the membership gate below), and
+  // useDao() must never be called a SECOND time on a page that already
+  // has one (see CardPreview.jsx's top comment for exactly the bug
+  // that caused) — so the caller passes its ALREADY-EXISTING dao
+  // instance in, the same instance `address` now comes from too.
+  const address = dao?.account;
 
   const loadThreads = useCallback(async () => {
     setLoadingThreads(true);
@@ -96,7 +127,24 @@ export function useForum() {
     return { root, replies };
   }, []);
 
+  // ⚠️ FIX: the forum had NO membership check at all — any wallet,
+  // including one that never held a Shield/Council token, could
+  // publish straight to the public Nostr relays this forum reads from.
+  // Those relays don't reliably support deletion (see the FORUM_TAG
+  // comment above), so keeping unvetted wallets out in the first place
+  // matters far more here than being able to take a bad post down
+  // afterwards. Same eligibility rule as canProposeSanction() in
+  // useDao.js (an active Shield/Council token, not currently
+  // restricted by a sanction, current on the Human Rights Policy) —
+  // this app already treats that as "who's a real, current member".
+  function checkForumEligibility() {
+    if (dao?.canPostToForum) return dao.canPostToForum();
+    return { eligible: false, reason: "Connect your wallet to post" };
+  }
+
   const createThread = useCallback(async ({ title, category, body }) => {
+    const elig = checkForumEligibility();
+    if (!elig.eligible) return { success: false, error: elig.reason };
     try {
       const pubkey = await getSignerPubkey();
       const unsigned = {
@@ -118,9 +166,12 @@ export function useForum() {
     } catch (e) {
       return { success: false, error: e.message || "Failed to publish the thread." };
     }
-  }, [getSignerPubkey, signEvent, address]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dao, getSignerPubkey, signEvent, address]);
 
   const postReply = useCallback(async (threadId, body) => {
+    const elig = checkForumEligibility();
+    if (!elig.eligible) return { success: false, error: elig.reason };
     try {
       const pubkey = await getSignerPubkey();
       const unsigned = {
@@ -141,7 +192,58 @@ export function useForum() {
     } catch (e) {
       return { success: false, error: e.message || "Failed to publish the reply." };
     }
-  }, [getSignerPubkey, signEvent, address]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dao, getSignerPubkey, signEvent, address]);
 
-  return { threads, loadingThreads, error, loadThreads, loadThread, createThread, postReply };
+  // Reporting is intentionally NOT gated behind full Shield/Council
+  // membership like posting is — anyone with a connected wallet can
+  // flag something, which is the lower-risk direction (a flood of
+  // reports still only ever feeds a queue that member-moderators must
+  // act on; it can't by itself take anything down). Only an actual
+  // connected wallet is required, so reports aren't fully anonymous.
+  const reportPost = useCallback(
+    async (targetEventId, targetPubkey, { category, description }) => {
+      if (!address) return { success: false, error: "Connect your wallet to post" };
+      try {
+        const pubkey = await getSignerPubkey();
+        const nip56Type = nip56TypeFor(category);
+        const unsigned = {
+          kind: 1984,
+          pubkey,
+          created_at: Math.floor(Date.now() / 1000),
+          tags: [
+            ["e", targetEventId, "", nip56Type],
+            ...(targetPubkey ? [["p", targetPubkey, nip56Type]] : []),
+            ["t", FORUM_REPORT_TAG],
+          ],
+          content: JSON.stringify({
+            app: "hrpdao-forum-report",
+            v: 1,
+            category,
+            description: description || "",
+            reporterAddress: address.toLowerCase(),
+          }),
+        };
+        const signed = await signEvent(unsigned);
+        const res = await publishEvent(signed);
+        if (!res.ok) return { success: false, error: "No relay accepted the report." };
+        return { success: true, id: signed.id };
+      } catch (e) {
+        return { success: false, error: e.message || "Failed to publish the report." };
+      }
+    },
+    [getSignerPubkey, signEvent, address],
+  );
+
+  return {
+    threads,
+    loadingThreads,
+    error,
+    loadThreads,
+    loadThread,
+    createThread,
+    postReply,
+    reportPost,
+    canPost: checkForumEligibility,
+  };
 }
