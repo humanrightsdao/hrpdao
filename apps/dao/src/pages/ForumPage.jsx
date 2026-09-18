@@ -7,7 +7,7 @@ import ForumAuthor from "../components/ForumAuthor";
 import { fmtRelative } from "../lib/format";
 import { tDaoMessage } from "../lib/daoMessages";
 import NewThreadModal from "../components/NewThreadModal";
-import { fetchAllForumModActions, computeModerationState } from "../lib/forumModeration";
+import { fetchAllForumModActions, computeModerationState, computeBanState } from "../lib/forumModeration";
 
 const CATEGORIES = ["all", "tech", "org", "policy", "general"];
 const CAT_LABEL_KEYS = {
@@ -20,11 +20,13 @@ export default function ForumPage() {
   const forum = useForum(dao);
   const [cat, setCat] = useState("all");
   const [showNew, setShowNew] = useState(false);
-  // Which threads a Shield/Council moderator has hidden/blurred — see
-  // ForumModerationPage.jsx / src/lib/forumModeration.js. Fetched
-  // alongside the thread list itself so a fully-hidden thread never
-  // renders here at all (a "best effort" removal — see useForum.js's
-  // note that Nostr relays don't reliably support real deletion).
+  // Which threads a Shield/Council moderator has hidden/blurred, and
+  // which AUTHORS have hit forum ban-vote quorum — see ModerationPage.jsx's
+  // "Скарги форуму" tab / src/lib/forumModeration.js. Fetched alongside
+  // the thread list itself so a fully-hidden thread (or one by a banned
+  // author) never renders here at all (a "best effort" removal — see
+  // useForum.js's note that Nostr relays don't reliably support real
+  // deletion).
   const [modActions, setModActions] = useState([]);
 
   useEffect(() => {
@@ -33,12 +35,16 @@ export default function ForumPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  const totalEligibleVoters = Number(dao.shieldInfo?.totalSupply || 0);
   const modState = {};
   for (const th of forum.threads) {
     modState[th.id] = computeModerationState(modActions, th.id);
+    if (th.address) {
+      modState[th.id].authorBanned = computeBanState(modActions, th.address, totalEligibleVoters).banned;
+    }
   }
 
-  const visible = forum.threads.filter((th) => !modState[th.id]?.hidden);
+  const visible = forum.threads.filter((th) => !modState[th.id]?.hidden && !modState[th.id]?.authorBanned);
   const filtered = cat === "all" ? visible : visible.filter((th) => th.category === cat);
 
   // Membership gate (see useDao.js's canPostToForum) — a wallet that

@@ -16,6 +16,7 @@ import App from "./App";
 import ThemeProvider from "./components/ThemeProvider";
 import "./index.css";
 import { LensAuthProvider } from "./context/LensAuthContext";
+import { LensDaoProvider } from "./context/LensDaoContext";
 import { NostrIdentityProvider } from "./hooks/useNostrIdentity";
 
 // Everything below "/" is route-based code-split with React.lazy so the
@@ -294,6 +295,7 @@ ReactDOM.createRoot(document.getElementById("root")).render(
         <I18nextProvider i18n={i18n}>
           <ThemeProvider>
             <LensAuthProvider>
+              <LensDaoProvider>
               <NostrIdentityProvider>
                 <BrowserRouter>
                   <Suspense fallback={<RouteFallback />}>
@@ -354,6 +356,7 @@ ReactDOM.createRoot(document.getElementById("root")).render(
                   </Suspense>
                 </BrowserRouter>
               </NostrIdentityProvider>
+              </LensDaoProvider>
             </LensAuthProvider>
           </ThemeProvider>
         </I18nextProvider>

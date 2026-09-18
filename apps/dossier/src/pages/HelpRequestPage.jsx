@@ -47,7 +47,7 @@ import { useLensProfile } from "../hooks/useLensProfile";
 // (a help request here is also a regular Lens Post, so lens_post_id
 // works the same way).
 import { useLensAuth } from "../context/LensAuthContext";
-import { useLensDAO } from "../hooks/useLensDAO";
+import { useLensDaoContext } from "../context/LensDaoContext";
 import useLensComments from "../hooks/useLensComments";
 import CommentsSection from "../components/CommentsSection";
 // NOTE: without this, moderation actions (blur/hide/critical-hide) only
@@ -94,7 +94,7 @@ const HelpRequestPage = () => {
   // sessionClient is needed both for comments (useLensComments) and for
   // reports (ReportModal); dao is the same Shield/Senate SBT check used
   // on CountryFeed.jsx/PostPage.jsx.
-  const dao = useLensDAO();
+  const dao = useLensDaoContext();
   const { getTranslatedCountryName } = useCountry(i18n.language);
 
   const [userProfile, setUserProfile] = useState(null);
@@ -228,7 +228,7 @@ const HelpRequestPage = () => {
   // just CLOSES OVER that variable and is called later (on user click),
   // so by call time the variable is already guaranteed to be initialized.
   const postCommentWithLimit = async (text, mediaFiles) => {
-    const rateCheck = await checkPostRateLimit(myAccountAddress, text);
+    const rateCheck = await checkPostRateLimit(myAccountAddress, text, { isRestricted: dao.isRestricted });
     if (!rateCheck.allowed) {
       alert(rateCheck.reason);
       return;

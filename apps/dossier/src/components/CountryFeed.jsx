@@ -9,7 +9,7 @@ import { useLensAuth } from "../context/LensAuthContext";
 import TipButton from "./TipButton";
 import PostCard from "./PostCard";
 import { useLensProfile } from "../hooks/useLensProfile";
-import { useLensDAO } from "../hooks/useLensDAO";
+import { useLensDaoContext } from "../context/LensDaoContext";
 import ReportModal from "./ReportModal";
 import {
   fetchAllModActions,
@@ -87,7 +87,7 @@ const CountryFeed = ({
     address: connectedAddress,
   } = useLensAuth();
   const { getTranslatedCountryName } = useCountry(i18n.language);
-  const dao = useLensDAO();
+  const dao = useLensDaoContext();
   const [reportModalPost, setReportModalPost] = useState(null);
   const [posts, setPosts] = useState([]);
   // ADDED: guards handleReaction() against double-clicks — a reaction
@@ -610,7 +610,7 @@ const CountryFeed = ({
       connectedAddress ||
       lensWalletAddress ||
       null;
-    const rateCheck = await checkPostRateLimit(myAddressForLimit, content);
+    const rateCheck = await checkPostRateLimit(myAddressForLimit, content, { isRestricted: dao.isRestricted });
     if (!rateCheck.allowed) {
       alert(rateCheck.reason);
       return;

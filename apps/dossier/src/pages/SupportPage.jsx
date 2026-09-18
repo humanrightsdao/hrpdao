@@ -41,7 +41,7 @@ import { useLensProfile } from "../hooks/useLensProfile";
 // ModerationQueue.jsx взагалі не рахувались на цій сторінці. Без окремих
 // hook/component файлів — усе прямо тут.
 import { useLensAuth } from "../context/LensAuthContext";
-import { useLensDAO } from "../hooks/useLensDAO";
+import { useLensDaoContext } from "../context/LensDaoContext";
 import ReportModal from "../components/ReportModal";
 import useLensPosts from "../hooks/useLensPosts";
 import {
@@ -75,7 +75,7 @@ const SupportPage = () => {
   // failed with "Wallet not connected" unconditionally, regardless of
   // the wallet actually being connected. Same fix as PostPage.jsx.
   const { sessionClient, getWalletClient } = useLensAuth();
-  const dao = useLensDAO();
+  const dao = useLensDaoContext();
   const { createLensComment } = useLensPosts(sessionClient, getWalletClient);
 
   const [reportModalRequest, setReportModalRequest] = useState(null);

@@ -289,9 +289,27 @@ function handleChatStream(request, env, ctx) {
         );
 
         if (!geminiRes.ok || !geminiRes.body) {
+          // Previously this discarded the response body entirely and always
+          // sent the generic "Gemini API error <status>" fallback, so a 403
+          // gave no clue whether the key was missing, invalid, unauthorized
+          // for this model, or something else. Read Google's actual error
+          // payload (same as handleChat already does for the non-streaming
+          // path) and log it server-side so the real cause shows up in
+          // `wrangler tail` even if the friendly message stays terse.
+          let apiMessage;
+          try {
+            const errorData = await geminiRes.json();
+            apiMessage = errorData?.error?.message;
+          } catch {
+            // Body wasn't JSON (or already consumed) — fall back below.
+          }
+          console.error(
+            `Gemini API error ${geminiRes.status} (stream):`,
+            apiMessage || "(no details in response body)",
+          );
           const friendly = friendlyErrorMessage(
             geminiRes.status,
-            `Gemini API error ${geminiRes.status}`,
+            apiMessage || `Gemini API error ${geminiRes.status}`,
           );
           await send({ type: "error", error: friendly });
           return;

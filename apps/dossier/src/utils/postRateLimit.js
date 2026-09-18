@@ -208,13 +208,37 @@ function findDuplicateContent(recentEntries, newContent) {
  * @param {string|null} content - the text of the publication currently
  *   being submitted. If not provided - only the rate limit is checked,
  *   without a duplicate check (e.g. if the caller doesn't have the text yet).
+ * @param {{isRestricted?: boolean}} [opts] - pass dao.isRestricted (from
+ *   useLensDAO()) through here so an on-chain-sanctioned account is
+ *   blocked from posting - see the note inside the function body.
  * @returns {Promise<
  *   {allowed: true} |
  *   {allowed: false, reason: string, retryAfterMs?: number, windowLabel?: string, isDuplicate?: boolean, duplicateMatch?: object}
  * >}
  */
-export async function checkPostRateLimit(walletAddress, content = null) {
+export async function checkPostRateLimit(walletAddress, content = null, { isRestricted = false } = {}) {
   if (!walletAddress) return { allowed: true };
+
+  // â ï¸ SYNCED WITH THE DAO APP: an on-chain DisciplineModule
+  // restriction (a Warning/PartialRestriction/FullSlash sanction that's
+  // currently active - dao.isRestricted, read the same way by BOTH
+  // apps from the SAME contract) blocks publishing here too, not just
+  // in the DAO app's own forum. This is deliberately the ONLY 
+  // cross-app-enforced ban mechanism: this app's own report/ban-vote
+  // queue (ModerationQueue.jsx) and the DAO forum's (useForum.js's
+  // checkNotBanned()) each only ever stop posting on THEIR OWN side,
+  // because they're each built on a different, mutually-invisible
+  // off-chain network (Lens comments here, Nostr events there). The
+  // on-chain restriction is the one state both apps already read
+  // identically - see ModerationPage.jsx's "Оформити ончейн-бан"
+  // button in the DAO app, which is exactly how a ban-vote quorum
+  // over there gets turned into something enforced over here too.
+  if (isRestricted) {
+    return {
+      allowed: false,
+      reason: "Posting is suspended while an active sanction restricts your rights.",
+    };
+  }
 
   const widestWindowMs = Math.max(...POST_RATE_LIMITS.map((l) => l.windowMs));
   const now = Date.now();

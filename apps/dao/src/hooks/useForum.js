@@ -1,6 +1,8 @@
 import { useState, useCallback } from "react";
 import { pool, RELAYS, publishEvent } from "../lib/nostrLookup";
 import { useNostrIdentity } from "./useNostrIdentity";
+import { checkForumRateLimit } from "../lib/forumRateLimit";
+import { fetchAllForumModActions, computeBanState } from "../lib/forumModeration";
 
 // ── Tag schema ────────────────────────────────────────────
 // Thread:  kind:1, tags: [["t","hrp-forum"], ["t","hrp-forum-<cat>"], ["subject", title], ["address", wallet]]
@@ -142,11 +144,44 @@ export function useForum(dao) {
     return { eligible: false, reason: "Connect your wallet to post" };
   }
 
+  // ⚠️ Cross-app note: this checks ONLY this app's own Nostr ban-vote
+  // log (see forumModeration.js's computeBanState) — Dossier's Lens-based
+  // reports/mod-actions live on a completely different network and
+  // aren't visible here. A quorum reached HERE stops posting HERE
+  // immediately, which is real and useful, but it is NOT automatically
+  // enforced on Dossier. The one thing BOTH apps already read
+  // natively is the on-chain DisciplineModule (dao.isRestricted, part
+  // of canPostToForum() above) — so once Shield/Council actually
+  // believe a ban-vote quorum reflects a real problem, the "Оформити
+  // ончейн-бан" button in ModerationPage.jsx's forum tab turns it into
+  // an on-chain FullSlash sanction, which IS enforced identically on
+  // both apps because it's the same shared ledger. This local check is
+  // the fast, app-level first line of defense while that goes through
+  // Shield voting.
+  async function checkNotBanned() {
+    if (!dao?.account) return { banned: false };
+    try {
+      const actions = await fetchAllForumModActions();
+      const totalEligibleVoters = Number(dao.shieldInfo?.totalSupply || 0);
+      return computeBanState(actions, dao.account, totalEligibleVoters);
+    } catch {
+      return { banned: false }; // fail-open — a relay hiccup shouldn't block a legitimate post
+    }
+  }
+
   const createThread = useCallback(async ({ title, category, body }) => {
     const elig = checkForumEligibility();
     if (!elig.eligible) return { success: false, error: elig.reason };
+    const ban = await checkNotBanned();
+    if (ban.banned) return { success: false, error: "Forum posting is suspended — the community voted to ban this account." };
     try {
       const pubkey = await getSignerPubkey();
+      // Rate limit + duplicate-content check — see forumRateLimit.js.
+      // Checked AFTER the membership/ban gates (cheap, no network) but
+      // BEFORE actually building/signing the event (a wasted signature
+      // prompt for a post that's about to be rejected is bad UX).
+      const rl = await checkForumRateLimit(pubkey, body);
+      if (!rl.allowed) return { success: false, error: rl.reason };
       const unsigned = {
         kind: 1,
         pubkey,
@@ -172,8 +207,12 @@ export function useForum(dao) {
   const postReply = useCallback(async (threadId, body) => {
     const elig = checkForumEligibility();
     if (!elig.eligible) return { success: false, error: elig.reason };
+    const ban = await checkNotBanned();
+    if (ban.banned) return { success: false, error: "Forum posting is suspended — the community voted to ban this account." };
     try {
       const pubkey = await getSignerPubkey();
+      const rl = await checkForumRateLimit(pubkey, body);
+      if (!rl.allowed) return { success: false, error: rl.reason };
       const unsigned = {
         kind: 1,
         pubkey,

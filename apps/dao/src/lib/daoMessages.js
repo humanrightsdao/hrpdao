@@ -83,6 +83,17 @@ const MESSAGE_KEYS = {
   "Failed to publish the report.": "dao.errors.forumPublishReportFailed",
   "No relay accepted the moderation action.": "dao.errors.forumNoRelayModAction",
   "Failed to publish the moderation action.": "dao.errors.forumPublishModActionFailed",
+  "Forum posting is suspended — the community voted to ban this account.": "dao.errors.forumBannedAccount",
+  // Rate limit / duplicate-content (forumRateLimit.js) — POST_RATE_LIMITS
+  // is a fixed constant, so these 3 window/max combinations are the only
+  // possible exact strings that reason can ever be.
+  "Too many posts in 30 seconds (limit: 1). Try again later.": "dao.errors.forumRateLimit30s",
+  "Too many posts in 1 hour (limit: 15). Try again later.": "dao.errors.forumRateLimit1h",
+  "Too many posts in 24 hours (limit: 30). Try again later.": "dao.errors.forumRateLimit24h",
+  "You've already posted this exact message. Try writing something new.":
+    "dao.errors.forumDuplicateExact",
+  "This message is very similar to one of your previous ones. Try rephrasing it.":
+    "dao.errors.forumDuplicateSimilar",
 
   // ── lib/locationZk.js ────────────────────────────────────────────
   "Geolocation isn't supported by this browser.": "dao.errors.geoUnsupported",

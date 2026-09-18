@@ -32,7 +32,7 @@ import useLensViolations from "../hooks/useLensViolations";
 import { useLensHelpRequests } from "../hooks/useLensHelpRequests";
 import { getSeverityInfo } from "../config/violationTypes";
 import { useLensProfile, useLensPublicProfile } from "../hooks/useLensProfile";
-import { useLensDAO } from "../hooks/useLensDAO";
+import { useLensDaoContext } from "../context/LensDaoContext";
 import { useCountry } from "../hooks/useCountry";
 import TipButton from "../components/TipButton";
 import ReportModal from "../components/ReportModal";
@@ -87,7 +87,7 @@ const FollowingPage = () => {
       : null;
   const { profile: lensProfile } = useLensProfile(lensWalletAddress);
   const { getTranslatedCountryName } = useCountry(i18n.language);
-  const dao = useLensDAO();
+  const dao = useLensDaoContext();
   const { data: walletClient } = useWalletClient();
   const {
     createLensComment,

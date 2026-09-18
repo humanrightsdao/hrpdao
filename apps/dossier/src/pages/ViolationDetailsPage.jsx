@@ -35,7 +35,7 @@ import {
 // posts and help requests (a violation is also just a regular Lens Post,
 // so lens_post_id works the same way).
 import { useLensAuth } from "../context/LensAuthContext";
-import { useLensDAO } from "../hooks/useLensDAO";
+import { useLensDaoContext } from "../context/LensDaoContext";
 import { useLensProfile } from "../hooks/useLensProfile";
 import useLensComments from "../hooks/useLensComments";
 import CommentsSection from "../components/CommentsSection";
@@ -123,7 +123,7 @@ const ViolationDetailsPage = () => {
   // lensProfile for the avatar/country in the comments block.
   const { sessionClient, getWalletClient, address: connectedAddress } =
     useLensAuth();
-  const dao = useLensDAO();
+  const dao = useLensDaoContext();
   const lensWalletAddress = localStorage.getItem("lens_wallet_address");
   const { profile: lensProfile } = useLensProfile(lensWalletAddress);
 
@@ -199,7 +199,7 @@ const ViolationDetailsPage = () => {
   // ADDED: a wrapper over postComment with the shared publishing limit
   // (1/min, 10/hr, 20/day - the same counter used for posts).
   const postCommentWithLimit = async (text, mediaFiles) => {
-    const rateCheck = await checkPostRateLimit(myAccountAddress, text);
+    const rateCheck = await checkPostRateLimit(myAccountAddress, text, { isRestricted: dao.isRestricted });
     if (!rateCheck.allowed) {
       alert(rateCheck.reason);
       return;

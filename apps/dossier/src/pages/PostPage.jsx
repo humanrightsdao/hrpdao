@@ -24,7 +24,7 @@ import { useLensProfile } from "../hooks/useLensProfile";
 // Check the import path below — it should point to the same file that
 // logs "✅ Lens session restored from storage" (LensAuthContext.jsx).
 import { useLensAuth } from "../context/LensAuthContext";
-import { useLensDAO } from "../hooks/useLensDAO";
+import { useLensDaoContext } from "../context/LensDaoContext";
 import { useTipJar } from "../hooks/useTipJar";
 import TipButton from "../components/TipButton";
 // ADDED: a shared comments hook/component, extracted out of this same
@@ -103,7 +103,7 @@ const PostPage = () => {
   // FollowingPage.jsx for the "Report" functionality — the DAO wallet,
   // Shield/Senate SBT check (resolveSanctionTarget/proposeSanction), and
   // shieldInfo.totalSupply for computing the author's ban state.
-  const dao = useLensDAO();
+  const dao = useLensDaoContext();
 
   // ── Helpers ──────────────────────────────────────────────────────────────
   const getAuthorWalletAddress = (p) =>
@@ -206,7 +206,7 @@ const PostPage = () => {
   // and to the full field in CommentsSection - both simply call the same
   // postComment(), so it's enough to wrap it once here.
   const postCommentWithLimit = async (text, mediaFiles) => {
-    const rateCheck = await checkPostRateLimit(myAccountAddress, text);
+    const rateCheck = await checkPostRateLimit(myAccountAddress, text, { isRestricted: dao.isRestricted });
     if (!rateCheck.allowed) {
       alert(rateCheck.reason);
       return;

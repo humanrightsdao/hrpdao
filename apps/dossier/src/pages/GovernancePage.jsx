@@ -27,7 +27,7 @@ import { useLensAuth } from "../context/LensAuthContext";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import CreatePostModal from "../components/CreatePostModal";
 import useUserInfo from "../hooks/useUserInfo";
-import { useLensDAO } from "../hooks/useLensDAO";
+import { useLensDaoContext } from "../context/LensDaoContext";
 import { useTipJar } from "../hooks/useTipJar";
 import useLensPosts from "../hooks/useLensPosts";
 import ModerationQueue from "../components/ModerationQueue";
@@ -235,7 +235,7 @@ const GovernancePage = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [caseId]);
 
-  const dao = useLensDAO();
+  const dao = useLensDaoContext();
   const tipJar = useTipJar();
   // sessionClient is needed for createLensComment() below (publishing a
   // system link-comment post↔proposal from ModerationQueue.jsx), and

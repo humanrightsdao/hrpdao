@@ -36,10 +36,25 @@ export const MOD_ACTIONS = {
   UNHIDE: "unhide",
   CRITICAL_HIDE: "critical_hide",
   CRITICAL_CONFIRM: "critical_confirm",
+  BAN_VOTE: "ban_vote",
 };
 
 export const CRITICAL_CONFIRM_REQUIRED = 2;
 export const CRITICAL_CONFIRM_WINDOW_MS = 48 * 60 * 60 * 1000; // 48h
+export const BAN_QUORUM_PCT = 0.5; // 50%+ of Shield holders
+export const BAN_VOTING_WINDOW_MS = 7 * 24 * 60 * 60 * 1000; // 7 days, matches DisciplineModule
+
+// ── Automatic temporary quarantine based on report velocity ────────────
+// Same idea and thresholds as dossier's moderationActions.js: closes the
+// gap between "a post has already caused harm" and "Shield/Council had
+// time to vote" — if AUTO_QUARANTINE_REPORT_THRESHOLD DIFFERENT wallets
+// report the same post within AUTO_QUARANTINE_WINDOW_MS, it gets the
+// same `blurred` state as a manual moderator BLUR would give it. Not a
+// ban, not a hide — the mildest action, still visible on click. A single
+// wallet filing repeated reports doesn't count more than once (only
+// UNIQUE reporterAddress values within the window matter).
+export const AUTO_QUARANTINE_REPORT_THRESHOLD = 5;
+export const AUTO_QUARANTINE_WINDOW_MS = 10 * 60 * 1000; // 10 minutes
 
 // ── Reading reports (see useForum.js's reportPost — NIP-56 kind:1984) ──
 
@@ -74,10 +89,52 @@ export async function fetchAllForumReports() {
     .sort((a, b) => b.createdAt - a.createdAt);
 }
 
+/**
+ * Finds the earliest moment when the number of DIFFERENT reporters for a
+ * targetEventId within a sliding AUTO_QUARANTINE_WINDOW_MS window first
+ * reached AUTO_QUARANTINE_REPORT_THRESHOLD. Returns null if that never
+ * happened (even if the total report count exceeds the threshold, but
+ * spread out over a period wider than the window — a slow natural
+ * stream of reports should go through the normal queue, not automation).
+ * Ported 1:1 from dossier's moderationActions.js.
+ */
+export function findAutoQuarantineTrigger(reports, targetEventId) {
+  if (!reports || reports.length === 0) return null;
+
+  const relevant = reports
+    .filter((r) => r.targetEventId === targetEventId && r.reporterAddress)
+    .map((r) => ({ reporter: r.reporterAddress.toLowerCase(), at: r.createdAt * 1000 }))
+    .sort((a, b) => a.at - b.at);
+
+  if (relevant.length < AUTO_QUARANTINE_REPORT_THRESHOLD) return null;
+
+  let left = 0;
+  const countInWindow = new Map();
+
+  for (let right = 0; right < relevant.length; right++) {
+    const cur = relevant[right];
+    countInWindow.set(cur.reporter, (countInWindow.get(cur.reporter) || 0) + 1);
+
+    while (relevant[left].at < cur.at - AUTO_QUARANTINE_WINDOW_MS) {
+      const old = relevant[left];
+      const c = countInWindow.get(old.reporter) - 1;
+      if (c <= 0) countInWindow.delete(old.reporter);
+      else countInWindow.set(old.reporter, c);
+      left++;
+    }
+
+    if (countInWindow.size >= AUTO_QUARANTINE_REPORT_THRESHOLD) {
+      return { triggeredAt: cur.at, distinctReporters: countInWindow.size };
+    }
+  }
+
+  return null;
+}
+
 // ── Reading/publishing moderation actions ──────────────────────────────
 
-function buildModActionContent({ action, targetEventId }) {
-  return JSON.stringify({ app: "hrpdao-forum-mod", v: 1, action, targetEventId });
+function buildModActionContent({ action, targetEventId, targetAddress }) {
+  return JSON.stringify({ app: "hrpdao-forum-mod", v: 1, action, targetEventId, targetAddress });
 }
 
 function parseModActionEvent(ev) {
@@ -98,7 +155,8 @@ function parseModActionEvent(ev) {
     moderatorAddress: ev.tags.find((t) => t[0] === "address")?.[1] || null,
     createdAt: ev.created_at,
     action: parsed.action,
-    targetEventId: parsed.targetEventId,
+    targetEventId: parsed.targetEventId || null,
+    targetAddress: parsed.targetAddress || null,
   };
 }
 
@@ -111,12 +169,21 @@ export async function fetchAllForumModActions() {
 }
 
 /**
- * Signs and publishes a single moderation action event.
+ * Signs and publishes a single moderation action event. `targetEventId`
+ * for content actions (blur/hide/critical/confirm); `targetAddress` for
+ * BAN_VOTE, which concerns an account, not one specific post.
  * `signEvent`/`getSignerPubkey`/`address` — pass through from
  * useNostrIdentity()/dao, same signer identity as everything else this
  * app publishes to Nostr with (see useForum.js).
  */
-export async function publishModAction({ action, targetEventId, getSignerPubkey, signEvent, address }) {
+export async function publishModAction({
+  action,
+  targetEventId = null,
+  targetAddress = null,
+  getSignerPubkey,
+  signEvent,
+  address,
+}) {
   try {
     const pubkey = await getSignerPubkey();
     const unsigned = {
@@ -127,7 +194,7 @@ export async function publishModAction({ action, targetEventId, getSignerPubkey,
         ["t", MOD_ACTION_TAG],
         ...(address ? [["address", address.toLowerCase()]] : []),
       ],
-      content: buildModActionContent({ action, targetEventId }),
+      content: buildModActionContent({ action, targetEventId, targetAddress }),
     };
     const signed = await signEvent(unsigned);
     const res = await publishEvent(signed);
@@ -149,8 +216,13 @@ export async function publishModAction({ action, targetEventId, getSignerPubkey,
  *    confirmations from OTHER moderators within CRITICAL_CONFIRM_WINDOW_MS,
  *    or it auto-reverts (computed live against Date.now(), no separate
  *    "revert" event needs to be published).
+ *  - auto-quarantine: if a 3rd argument `{ reports }` is provided,
+ *    findAutoQuarantineTrigger() is additionally computed and, absent a
+ *    more recent manual moderator decision, sets blurred=true itself.
+ *    Without the 3rd argument, behaves exactly as before (backward
+ *    compatible with the calls added in the previous step).
  */
-export function computeModerationState(actions, targetEventId) {
+export function computeModerationState(actions, targetEventId, { reports = null } = {}) {
   const relevant = actions.filter((a) => a.targetEventId === targetEventId);
 
   let blurred = false;
@@ -160,12 +232,19 @@ export function computeModerationState(actions, targetEventId) {
   let criticalHideAt = null;
   let criticalHideBy = null;
   let criticalConfirmations = [];
+  // Last EXPLICIT manual blur/unblur — compared against when
+  // auto-quarantine would trigger below, so a human decision made AFTER
+  // the report spike takes priority over the automation.
+  let lastManualBlurActionAt = null;
+  let lastManualUnblurActionAt = null;
 
   for (const a of relevant) {
     if (a.action === MOD_ACTIONS.BLUR) {
       blurred = true;
+      lastManualBlurActionAt = a.createdAt * 1000;
     } else if (a.action === MOD_ACTIONS.UNBLUR) {
       blurred = false;
+      lastManualUnblurActionAt = a.createdAt * 1000;
     } else if (a.action === MOD_ACTIONS.HIDE) {
       hidden = true;
       hiddenBy = a.moderatorAddress;
@@ -206,6 +285,29 @@ export function computeModerationState(actions, targetEventId) {
     }
   }
 
+  // ── Auto-quarantine ────────────────────────────────────────────────
+  // Only meaningful if not already hidden — blur adds nothing to
+  // something already invisible.
+  let autoQuarantined = false;
+  let autoQuarantineTriggeredAt = null;
+  let autoQuarantineDistinctReporters = 0;
+
+  if (reports && !hidden) {
+    const trigger = findAutoQuarantineTrigger(reports, targetEventId);
+    if (trigger) {
+      const humanReviewedAfterTrigger =
+        (lastManualBlurActionAt !== null && lastManualBlurActionAt >= trigger.triggeredAt) ||
+        (lastManualUnblurActionAt !== null && lastManualUnblurActionAt >= trigger.triggeredAt);
+
+      if (!humanReviewedAfterTrigger) {
+        autoQuarantined = true;
+        autoQuarantineTriggeredAt = trigger.triggeredAt;
+        autoQuarantineDistinctReporters = trigger.distinctReporters;
+        blurred = true;
+      }
+    }
+  }
+
   return {
     blurred,
     hidden,
@@ -216,5 +318,42 @@ export function computeModerationState(actions, targetEventId) {
     criticalConfirmations,
     criticalConfirmed,
     criticalDeadline,
+    autoQuarantined,
+    autoQuarantineTriggeredAt,
+    autoQuarantineDistinctReporters,
+  };
+}
+
+/**
+ * Computes the ban-voting state for a SINGLE account (by EOA address).
+ * Ported 1:1 from dossier's computeBanState.
+ *
+ * totalEligibleVoters should be shieldInfo.totalSupply (NOT Shield +
+ * Council summed — Council is a subset of Shield under the current
+ * minting model, see DaoGovernor.quorum()'s same invariant).
+ */
+export function computeBanState(actions, targetAddress, totalEligibleVoters) {
+  const relevant = actions.filter(
+    (a) => a.action === MOD_ACTIONS.BAN_VOTE && a.targetAddress?.toLowerCase() === targetAddress?.toLowerCase(),
+  );
+
+  if (relevant.length === 0) {
+    return { voters: [], quorumPct: 0, banned: false, votingDeadline: null, expired: false };
+  }
+
+  const firstVoteAt = relevant[0].createdAt * 1000;
+  const votingDeadline = firstVoteAt + BAN_VOTING_WINDOW_MS;
+  const expired = Date.now() > votingDeadline;
+
+  const withinWindow = relevant.filter((a) => a.createdAt * 1000 <= votingDeadline);
+  const distinctVoters = [...new Set(withinWindow.map((a) => a.moderatorAddress?.toLowerCase()))];
+  const quorumPct = totalEligibleVoters > 0 ? (distinctVoters.length / totalEligibleVoters) * 100 : 0;
+
+  return {
+    voters: distinctVoters,
+    quorumPct,
+    banned: quorumPct >= BAN_QUORUM_PCT * 100,
+    votingDeadline,
+    expired,
   };
 }

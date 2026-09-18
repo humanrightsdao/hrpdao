@@ -28,7 +28,7 @@ import { SEVERITY_LEVELS, getSeverityInfo } from "../config/violationTypes";
 // ModerationQueue.jsx weren't tallied at all on this page. Without
 // separate hook/component files — everything is right here, as agreed.
 import { useLensAuth } from "../context/LensAuthContext";
-import { useLensDAO } from "../hooks/useLensDAO";
+import { useLensDaoContext } from "../context/LensDaoContext";
 import { useLensProfile } from "../hooks/useLensProfile";
 import { useWalletClient } from "wagmi";
 import ReportModal from "../components/ReportModal";
@@ -69,7 +69,7 @@ const ViolationsListPage = () => {
   // failed with "Wallet not connected" unconditionally, regardless of
   // the wallet actually being connected. Same fix as PostPage.jsx.
   const { sessionClient, getWalletClient } = useLensAuth();
-  const dao = useLensDAO();
+  const dao = useLensDaoContext();
   const lensWalletAddress = localStorage.getItem("lens_wallet_address");
   const { profile: lensProfile } = useLensProfile(lensWalletAddress);
   const { data: walletClient } = useWalletClient();

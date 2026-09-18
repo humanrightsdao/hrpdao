@@ -1,6 +1,6 @@
 import React from "react";
 import ReactDOM from "react-dom/client";
-import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { http } from "wagmi";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { walletConnect } from "wagmi/connectors";
@@ -27,7 +27,6 @@ import RankingPage from "./pages/RankingPage";
 import DocsPage from "./pages/DocsPage";
 import ForumPage from "./pages/ForumPage";
 import ForumThreadPage from "./pages/ForumThreadPage";
-import ForumModerationPage from "./pages/ForumModerationPage";
 import AboutPage from "./pages/AboutPage";
 import PrivacyPage from "./pages/PrivacyPage";
 import TermsPage from "./pages/TermsPage";
@@ -182,7 +181,10 @@ ReactDOM.createRoot(document.getElementById("root")).render(
               <Route path="ranking" element={<RankingPage />} />
               <Route path="docs" element={<DocsPage />} />
               <Route path="forum" element={<ForumPage />} />
-              <Route path="forum/moderation" element={<ForumModerationPage />} />
+              {/* Moved into ModerationPage.jsx's own "Скарги форуму" tab
+                  — this redirect just keeps last week's link/bookmark
+                  working instead of 404ing. */}
+              <Route path="forum/moderation" element={<Navigate to="/moderation?tab=forum" replace />} />
               <Route path="forum/:id" element={<ForumThreadPage />} />
               {/* Same pattern as dossier's /about, /terms, /privacy — see
                   its main.jsx for the equivalent routes. Kept inside the

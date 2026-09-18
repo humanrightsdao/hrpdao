@@ -19,22 +19,20 @@ import { useTipJar } from "../hooks/useTipJar";
 
 const PRESET_AMOUNTS = ["1", "5", "10"];
 
-// ⚠️ СИНХРОНІЗОВАНО з dao-app (CardPreview.jsx): раніше тут були
-// захардкоджені tGHO/tUSDC із symbol/decimals, заданими вручну — але
-// жодна з двох адрес (VITE_TEST_TOKEN_GHO, VITE_TEST_TOKEN_USDC) не була
-// задана в .env, тож обидві кнопки валют вели в нікуди (address:
-// undefined), і надіслати гонорар було фактично неможливо. Тепер
-// список валют, як і в dao, фільтрується за реально заданими в .env
-// адресами — токен без адреси просто не з'являється кнопкою — а
-// symbol/decimals не хардкодяться тут, а читаються наживо з самого
-// контракту токена через getTokenInfo() (див. tokenAndPresetsRow і
-// floatingPanel нижче), тож список лишається коректним, навіть якщо
-// припущення "tGHO=18 dec / tUSDC=6 dec" колись виявиться невірним.
 const TOKENS = [
-  { key: "tUSD", address: import.meta.env.VITE_TEST_TOKEN_USD },
-  { key: "USDC", address: import.meta.env.VITE_TEST_TOKEN_USDC },
-  { key: "tGHO", address: import.meta.env.VITE_TEST_TOKEN_GHO },
-].filter((tok) => tok.address);
+  {
+    key: "tGHO",
+    address: import.meta.env.VITE_TEST_TOKEN_GHO,
+    symbol: "tGHO",
+    decimals: 18,
+  },
+  {
+    key: "tUSDC",
+    address: import.meta.env.VITE_TEST_TOKEN_USDC,
+    symbol: "tUSDC",
+    decimals: 6,
+  },
+];
 
 // CHANGED: added `containerRef` (optional). When PostCard passes it, the
 // tip panel stops being a floating, fixed-position dropdown portaled into
@@ -61,7 +59,7 @@ export default function TipButton({ author, lensPostId, containerRef }) {
 
   const [open, setOpen] = useState(false);
   const [amount, setAmount] = useState("1");
-  const [selectedToken, setSelectedToken] = useState(TOKENS[0] || null);
+  const [selectedToken, setSelectedToken] = useState(TOKENS[0]);
   const [split, setSplit] = useState(null);
   const [tokenInfo, setTokenInfo] = useState(null);
   const [previewRightsAmount, setPreviewRightsAmount] = useState(null);
@@ -97,16 +95,14 @@ export default function TipButton({ author, lensPostId, containerRef }) {
     if (!open || !authorAddress) return;
 
     tipJar.previewSplit(authorAddress).then(setSplit);
-    if (selectedToken) {
-      tipJar
-        .getTokenInfo(viewerAddress, selectedToken.address)
-        .then(setTokenInfo);
-    }
+    tipJar
+      .getTokenInfo(viewerAddress, selectedToken.address)
+      .then(setTokenInfo);
   }, [open, authorAddress, selectedToken, viewerAddress]);
 
   // Preview rights on amount change
   useEffect(() => {
-    if (!open || !amount || Number(amount) <= 0 || !selectedToken) {
+    if (!open || !amount || Number(amount) <= 0) {
       setPreviewRightsAmount(null);
       return;
     }
@@ -156,7 +152,6 @@ export default function TipButton({ author, lensPostId, containerRef }) {
   if (!authorAddress) return null;
 
   const handleSend = async () => {
-    if (!selectedToken) return;
     setStatus("");
     const res = await tipJar.sendTip(
       authorAddress,
@@ -181,8 +176,7 @@ export default function TipButton({ author, lensPostId, containerRef }) {
   const amt = Number(amount);
   const overBalance = tokenInfo && amt > bal;
   const underMin = tokenInfo && amt < min && amt > 0;
-  const invalid =
-    overBalance || underMin || !amount || amt <= 0 || !selectedToken;
+  const invalid = overBalance || underMin || !amount || amt <= 0;
 
   // CHANGED: token selector + preset amounts used to be two separate
   // full-width rows (stacked to fit a narrow 272px popup). The inline
@@ -201,14 +195,12 @@ export default function TipButton({ author, lensPostId, containerRef }) {
               setPreviewRightsAmount(null);
             }}
             className={`px-2.5 py-1.5 text-[11px] font-medium rounded-lg border transition-all ${
-              selectedToken?.key === token.key
+              selectedToken.key === token.key
                 ? "bg-[#8B1A2A] border-[#8B1A2A]/25 text-white/90 dark:bg-[#2B000A] dark:border-[#b41e3c]/40 dark:text-[#e8a0b0]/85"
                 : "bg-slate-50 dark:bg-white/[0.03] border-slate-200 dark:border-white/[0.08] text-slate-400 dark:text-white/35 hover:border-slate-300 dark:hover:border-white/[0.15] hover:text-slate-600 dark:hover:text-white/55"
             }`}
           >
-            {tokenInfo && selectedToken?.key === token.key
-              ? tokenInfo.symbol
-              : token.key}
+            {token.symbol}
           </button>
         ))}
       </div>
@@ -317,18 +309,18 @@ export default function TipButton({ author, lensPostId, containerRef }) {
               : "text-slate-600 dark:text-white/40"
           }
         >
-          {bal.toFixed(2)} {tokenInfo.symbol}
+          {bal.toFixed(2)} {selectedToken.symbol}
         </span>
         {" · "}
         {t("tip_min_label")}{" "}
         <span className="text-slate-500 dark:text-white/35">
-          {tokenInfo.minAmountFormatted} {tokenInfo.symbol}
+          {tokenInfo.minAmountFormatted} {selectedToken.symbol}
         </span>
       </p>
       {overBalance && (
         <p className="text-[10px] text-red-500 dark:text-red-400/75">
           {t("tip_insufficient_balance", {
-            symbol: tokenInfo.symbol,
+            symbol: selectedToken.symbol,
             max: bal.toFixed(2),
           })}
         </p>
@@ -337,7 +329,7 @@ export default function TipButton({ author, lensPostId, containerRef }) {
         <p className="text-[10px] text-amber-500 dark:text-amber-400/75">
           {t("tip_below_minimum", {
             min: tokenInfo.minAmountFormatted,
-            symbol: tokenInfo.symbol,
+            symbol: selectedToken.symbol,
           })}
         </p>
       )}
@@ -376,11 +368,8 @@ export default function TipButton({ author, lensPostId, containerRef }) {
         {isLoading
           ? tipJar.progress || t("tip_sending")
           : overBalance
-            ? t("tip_insufficient_short", { symbol: tokenInfo.symbol })
-            : t("tip_support_button", {
-                amount,
-                symbol: tokenInfo?.symbol || selectedToken?.key || "",
-              })}
+            ? t("tip_insufficient_short", { symbol: selectedToken.symbol })
+            : t("tip_support_button", { amount, symbol: selectedToken.symbol })}
       </button>
     </div>
   );
@@ -432,14 +421,12 @@ export default function TipButton({ author, lensPostId, containerRef }) {
                   setPreviewRightsAmount(null);
                 }}
                 className={`flex-1 py-1.5 text-[11px] font-medium rounded-lg border transition-all ${
-                  selectedToken?.key === token.key
+                  selectedToken.key === token.key
                     ? "bg-[#8B1A2A] border-[#8B1A2A]/25 text-white/90 dark:bg-[#2B000A] dark:border-[#b41e3c]/40 dark:text-[#e8a0b0]/85"
                     : "bg-slate-50 dark:bg-white/[0.03] border-slate-200 dark:border-white/[0.08] text-slate-400 dark:text-white/35 hover:border-slate-300 dark:hover:border-white/[0.15] hover:text-slate-600 dark:hover:text-white/55"
                 }`}
               >
-                {tokenInfo && selectedToken?.key === token.key
-                  ? tokenInfo.symbol
-                  : token.key}
+                {token.symbol}
               </button>
             ))}
           </div>
@@ -505,11 +492,8 @@ export default function TipButton({ author, lensPostId, containerRef }) {
             {isLoading
               ? tipJar.progress || t("tip_sending")
               : overBalance
-                ? t("tip_insufficient_short", { symbol: tokenInfo.symbol })
-                : t("tip_support_button", {
-                    amount,
-                    symbol: tokenInfo?.symbol || selectedToken?.key || "",
-                  })}
+                ? t("tip_insufficient_short", { symbol: selectedToken.symbol })
+                : t("tip_support_button", { amount, symbol: selectedToken.symbol })}
           </button>
           {status && (
             <p

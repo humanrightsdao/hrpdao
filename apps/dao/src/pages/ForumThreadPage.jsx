@@ -8,7 +8,7 @@ import ReportForumModal from "../components/ReportForumModal";
 import SignerBadge, { useForumSigner } from "../components/SignerBadge";
 import { fmtRelative } from "../lib/format";
 import { tDaoMessage } from "../lib/daoMessages";
-import { fetchAllForumModActions, computeModerationState } from "../lib/forumModeration";
+import { fetchAllForumModActions, computeModerationState, computeBanState } from "../lib/forumModeration";
 
 // A moderator-blurred post/reply: collapsed behind a warning until the
 // reader explicitly clicks through. Not real access control (see
@@ -88,11 +88,15 @@ export default function ForumThreadPage() {
     );
   }
 
+  const totalEligibleVoters = Number(dao.shieldInfo?.totalSupply || 0);
   const rootState = computeModerationState(modActions, data.root.id);
-  // A moderator-hidden ROOT thread: the whole page becomes a removal
-  // notice rather than trying to still render a reply form under it —
-  // there's nothing left worth replying to.
-  if (rootState.hidden) {
+  const rootAuthorBanned = data.root.address
+    ? computeBanState(modActions, data.root.address, totalEligibleVoters).banned
+    : false;
+  // A moderator-hidden ROOT thread (or one by a now-banned author): the
+  // whole page becomes a removal notice rather than trying to still
+  // render a reply form under it — there's nothing left worth replying to.
+  if (rootState.hidden || rootAuthorBanned) {
     return (
       <div className="fade-rise max-w-2xl">
         <Link to="/forum" className="font-mono text-xs text-parchmentDim hover:text-verdigris">
@@ -106,9 +110,11 @@ export default function ForumThreadPage() {
     );
   }
 
-  const visibleReplies = data.replies.filter(
-    (r) => !computeModerationState(modActions, r.id).hidden,
-  );
+  const visibleReplies = data.replies.filter((r) => {
+    if (computeModerationState(modActions, r.id).hidden) return false;
+    if (r.address && computeBanState(modActions, r.address, totalEligibleVoters).banned) return false;
+    return true;
+  });
 
   return (
     <div className="fade-rise max-w-2xl">
