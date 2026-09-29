@@ -8,4 +8,13 @@
     "binding": "ASSETS",
     "run_worker_first": true
   }
+  // OPTIONAL — a GLOBAL cache for AI moderation verdicts (see AI_MODERATION.md).
+  // Without it the Worker still works: verdicts are cached per isolate only,
+  // so the same content may be analysed again after an isolate restarts.
+  // To enable: run `npx wrangler kv namespace create MODERATION_KV`, then add
+  // a comma after the "assets" block above and uncomment this:
+  //
+  // "kv_namespaces": [
+  //   { "binding": "MODERATION_KV", "id": "<the id printed by the command above>" }
+  // ]
 }

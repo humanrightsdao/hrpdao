@@ -16,6 +16,10 @@ import { eip712WalletActions } from "viem/zksync";
 // показують сирий службовий JSON скарги як "хтось написав коментар" —
 // користувач бачить [HRDAO_REPORT]{...} замість людського тексту.
 import { isReportComment } from "../utils/postReports";
+// ADDED: last line of defence — nothing is published without an AI verdict
+// (see utils/aiModeration.js → assertPublishAllowed).
+import { assertPublishAllowed } from "../utils/aiModeration";
+import { assertMediaPublishAllowed } from "../utils/aiMediaModeration";
 import { isModActionComment } from "../utils/moderationActions";
 import { sanitizeCount } from "../utils/sanitizeCount";
 import {
@@ -619,11 +623,21 @@ export default function useLensPosts(sessionClient = null, getWalletClient = nul
       category = "general",
       mediaFiles = [],
       h3Index = null,
+      moderationKind = "post",
     }) => {
       setLoading(true);
       setError("");
 
       try {
+        // ADDED: even if a screen forgot the UI gate (checkPostRateLimit),
+        // an unchecked text never reaches Lens. Same text already judged by
+        // the UI gate → reused instantly, no second wait or opinion.
+        await assertPublishAllowed({ text: content, kind: moderationKind });
+        // ADDED: same last line of defence for the attached media.
+        if (mediaFiles.length > 0) {
+          await assertMediaPublishAllowed(mediaFiles, { kind: moderationKind });
+        }
+
         const resolvedClient = getWalletClient ? await getWalletClient() : null;
         const walletClient = await getViemWalletClient(resolvedClient);
         const activeSessionClient = requireSessionClient();
@@ -775,6 +789,16 @@ export default function useLensPosts(sessionClient = null, getWalletClient = nul
       setError("");
 
       try {
+        // ADDED: same last line of defence for comments. Reports and the
+        // moderation action log are service comments written by the app
+        // itself, not user content — they are not screened.
+        if (!isReportComment(content) && !isModActionComment(content)) {
+          await assertPublishAllowed({ text: content, kind: "comment" });
+          if (mediaFiles.length > 0) {
+            await assertMediaPublishAllowed(mediaFiles, { kind: "comment" });
+          }
+        }
+
         const resolvedClient = getWalletClient ? await getWalletClient() : null;
         const walletClient = await getViemWalletClient(resolvedClient);
         const activeSessionClient = requireSessionClient();

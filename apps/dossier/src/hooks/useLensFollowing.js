@@ -76,11 +76,6 @@ function usePaginatedAccountList(fetchFn, accountAddress, pickAccount) {
     setLoading(true);
     setError(null);
 
-    console.log("🔍 useLensFollowing: запит", {
-      fn: fetchFn.name,
-      account: accountAddress,
-    });
-
     fetchFn(lensClient, { account: accountAddress })
       .then((result) => {
         if (cancelled) return;
@@ -94,11 +89,6 @@ function usePaginatedAccountList(fetchFn, accountAddress, pickAccount) {
         // лаг індексації testnet після follow-транзакції: транзакція
         // пройшла on-chain, але індексатор Lens ще не встиг її підхопити
         // в GraphQL-відповіді fetchFollowing/fetchFollowers).
-        console.log("🔍 useLensFollowing: відповідь", {
-          fn: fetchFn.name,
-          rawItemsCount: result.value.items.length,
-          rawItems: result.value.items,
-        });
         const mapped = result.value.items
           .map((item) => mapAccountToListItem(pickAccount(item)))
           .filter(Boolean);

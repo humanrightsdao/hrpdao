@@ -293,8 +293,17 @@ export function findAutoQuarantineTrigger(reports, postId) {
  *    the block below before the return). Without the 3rd argument, the
  *    function's behavior is identical to the previous version (backward
  *    compatible with existing calls).
+ *  - AI quarantine: if `{ aiVerdict }` is provided (a result from
+ *    utils/aiModeration.js — "Atticus Guard"), a "flag"/"block" verdict
+ *    blurs the post exactly like the auto-quarantine above: the mildest
+ *    action, revealable with one click. The AI can NEVER hide, sanction
+ *    or ban — those stay human decisions (hide / critical_hide /
+ *    ban_vote). An EXPLICIT moderator UNBLUR at any time overrides the AI
+ *    for this post ("human review takes priority over automation", the
+ *    same rule as for report-velocity quarantine). Verdicts the service
+ *    marked `degraded` (errors, timeouts) are ignored — fail open.
  */
-export function computeModerationState(actions, postId, { reports = null } = {}) {
+export function computeModerationState(actions, postId, { reports = null, aiVerdict = null } = {}) {
   const relevant = actions.filter((a) => a.targetPostId === postId);
 
   let blurred = false;
@@ -397,6 +406,20 @@ export function computeModerationState(actions, postId, { reports = null } = {})
     }
   }
 
+  // ── AI quarantine (Atticus Guard) ────────────────────────────────────────
+  let aiQuarantined = false;
+  if (
+    aiVerdict &&
+    !aiVerdict.degraded &&
+    (aiVerdict.verdict === "flag" || aiVerdict.verdict === "block") &&
+    !hidden &&
+    !blurred && // already blurred (manual / report spike): nothing to add
+    lastManualUnblurActionAt === null // a moderator already reviewed and cleared it
+  ) {
+    aiQuarantined = true;
+    blurred = true;
+  }
+
   return {
     blurred,
     hidden,
@@ -414,6 +437,11 @@ export function computeModerationState(actions, postId, { reports = null } = {})
     autoQuarantined,
     autoQuarantineTriggeredAt,
     autoQuarantineDistinctReporters,
+    // ADDED: true when the blur comes ONLY from the AI verdict (so the UI can
+    // say "flagged automatically by Atticus AI" instead of "by Shield/Senate"),
+    // plus the verdict itself for badges / moderator context.
+    aiQuarantined,
+    aiVerdict: aiQuarantined ? aiVerdict : null,
   };
 }
 

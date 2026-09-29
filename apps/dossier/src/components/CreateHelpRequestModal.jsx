@@ -248,6 +248,7 @@ const CreateHelpRequestModal = ({
     const rateCheck = await checkPostRateLimit(
       myAddressForLimit,
       description.trim(),
+      { kind: "help_request" },
     );
     if (!rateCheck.allowed) {
       setError(rateCheck.reason);

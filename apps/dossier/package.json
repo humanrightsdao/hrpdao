@@ -10,7 +10,9 @@
     "dev:all": "concurrently -k -n FRONTEND,BACKEND -c blue,magenta \"npm run dev\" \"npm run server\"",
     "build": "vite build",
     "lint": "eslint .",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "moderation:selftest": "node scripts/moderation-selftest.mjs",
+    "test:moderation": "node --test worker/moderation.test.js worker/index.test.js && node scripts/run-client-tests.mjs"
   },
   "dependencies": {
     "@lens-chain/sdk": "^1.0.3",

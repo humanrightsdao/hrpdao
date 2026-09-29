@@ -38,6 +38,8 @@ import {
 // ADDED: the shared publishing limit (1/min, 10/hr, 20/day) - the same
 // counter used for regular posts/help requests/comments.
 import { checkPostRateLimit } from "../utils/postRateLimit";
+import { assertPublishAllowed } from "../utils/aiModeration";
+import { assertMediaPublishAllowed } from "../utils/aiMediaModeration";
 
 // ADDED: max length for a violation description. Higher than a regular
 // post's 3000 (CreatePostModal.jsx) - a violation report is a formal,
@@ -598,6 +600,7 @@ const ViolationsPage = () => {
     const rateCheck = await checkPostRateLimit(
       myAddressForLimit,
       formData.violationDescription,
+      { kind: "violation" },
     );
     if (!rateCheck.allowed) {
       setSubmitError(rateCheck.reason);
@@ -647,6 +650,13 @@ const ViolationsPage = () => {
           t("coordinates_required") ||
             "Unable to determine address coordinates. Try selecting an address from the suggestions list.",
         );
+      }
+
+      // ADDED: check media BEFORE it is uploaded — Grove storage is immutable,
+      // so a file must never land there ahead of its safety check (moved from
+      // right before the Lens post() call, where it ran too late).
+      if (files.length > 0) {
+        await assertMediaPublishAllowed(files, { kind: "violation" });
       }
 
       // 1. First upload the files to Grove
@@ -735,6 +745,14 @@ const ViolationsPage = () => {
               ]
             : []),
         ].filter((a) => a.value !== ""), // remove attributes with an empty value
+      });
+
+      // ADDED: last line of defence — this page publishes with post()
+      // directly (not via useLensPosts), so it needs its own gate. The UI
+      // gate above already judged the same text → reused instantly.
+      await assertPublishAllowed({
+        text: formData.violationDescription,
+        kind: "violation",
       });
 
       // 3. Upload metadata to Grove

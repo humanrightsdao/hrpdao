@@ -31,6 +31,11 @@ import { useLensDaoContext } from "../context/LensDaoContext";
 import { useTipJar } from "../hooks/useTipJar";
 import useLensPosts from "../hooks/useLensPosts";
 import ModerationQueue from "../components/ModerationQueue";
+// ADDED: makes the (otherwise silent) AI moderation visible — status, self-check,
+// latest flags. See AI_MODERATION.md.
+import AIModerationPanel from "../components/AIModerationPanel";
+// ADDED: splits this page into "Community moderation" and "AI moderation".
+import ModerationSections from "../components/ModerationSections";
 // ADDED: resolves a "?case=<id>" deep link (the DAO app's "View report
 // in Dossier" link on each SanctionProposalCard) to the actual reported
 // Lens post, instead of just dropping the visitor on the general
@@ -482,10 +487,36 @@ const GovernancePage = () => {
                       `Couldn't find the reported post for case #${caseId} — it may have been removed, or the index hasn't caught up yet. Showing the full queue below.`}
                   </p>
                 )}
-                <ModerationQueue
-                  dao={dao}
-                  createLensComment={createLensComment}
-                  createLensPost={createLensPost}
+                {/* ADDED: two clearly separated parts. The queue stays the default
+                    (it is the daily work, and ?case= deep links must land on it). */}
+                <ModerationSections
+                  initial="community"
+                  sections={[
+                    {
+                      id: "community",
+                      label: t("mod_section_community", { defaultValue: "Community moderation" }),
+                      description: t("mod_section_community_desc", {
+                        defaultValue:
+                          "Reports, votes and decisions by Shield and Council members. People make the final call on anything doubtful or disputed.",
+                      }),
+                      content: (
+                        <ModerationQueue
+                          dao={dao}
+                          createLensComment={createLensComment}
+                          createLensPost={createLensPost}
+                        />
+                      ),
+                    },
+                    {
+                      id: "ai",
+                      label: t("mod_section_ai", { defaultValue: "AI moderation" }),
+                      description: t("mod_section_ai_desc", {
+                        defaultValue:
+                          "Atticus AI is the first line: it checks every text before it is published, refuses clearly harmful content and blurs suspicious content for the community to review.",
+                      }),
+                      content: <AIModerationPanel />,
+                    },
+                  ]}
                 />
               </div>
             </div>

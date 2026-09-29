@@ -78,14 +78,8 @@ export default function useUserInfo() {
   // Function for loading user information
   const loadUserInfo = useCallback(
     async (forceRefresh = false) => {
-      console.log("🔄 loadUserInfo started", {
-        forceRefresh,
-        isLoadingInProgress,
-      });
-
       // Prevent multiple concurrent requests
       if (isLoadingInProgress && !forceRefresh) {
-        console.log("⏳ Another load is in progress, skipping...");
         return cachedUserInfo;
       }
 
@@ -111,7 +105,6 @@ export default function useUserInfo() {
         cachedAccountKey === cacheKey &&
         now - cacheTimestamp < CACHE_DURATION
       ) {
-        console.log("💾 Using cached user info");
         if (isMounted.current) {
           setUserInfo(cachedUserInfo);
           setLoading(false);
@@ -141,7 +134,6 @@ export default function useUserInfo() {
         // lensAddress відсутній — це просто означає "ніхто не залогінений",
         // а не "перевір стару Supabase-сесію".
         if (!lensAddress) {
-          console.log("👤 No Lens session found");
           cachedUserInfo = null;
           cacheTimestamp = 0;
           cachedAccountKey = null;
@@ -290,7 +282,6 @@ export default function useUserInfo() {
         if (!pendingRetry && isMounted.current) {
           setLoading(false);
         }
-        console.log("🏁 loadUserInfo completed, pendingRetry:", pendingRetry);
       }
     },
     [t],
@@ -351,11 +342,6 @@ export default function useUserInfo() {
 
   // Load information on initialization
   useEffect(() => {
-    console.log(
-      "🎯 useUserInfo useEffect triggered, cache exists:",
-      !!cachedUserInfo,
-    );
-
     // Set mounting
     isMounted.current = true;
 

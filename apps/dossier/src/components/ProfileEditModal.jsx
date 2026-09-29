@@ -22,6 +22,8 @@ import {
 } from "@lens-protocol/metadata";
 import { useLensAuth } from "../context/LensAuthContext";
 import { uploadFileToGrove } from "../lib/grove";
+import { assertPublishAllowed } from "../utils/aiModeration";
+import { assertMediaPublishAllowed } from "../utils/aiMediaModeration";
 
 // Lens returns attribute `type` as GraphQL's UPPERCASE enum
 // ("STRING", "BOOLEAN", "NUMBER", "DATE", "JSON"), but
@@ -94,6 +96,8 @@ const AvatarUpload = ({ userInfo, onAvatarUpdated, onUploadingChange }) => {
     setError("");
     setSuccess("");
     try {
+      // ADDED: last line of defence for the avatar image.
+      await assertMediaPublishAllowed([file], { kind: "profile" });
       const { uri, gatewayUrl } = await uploadFileToGrove(file);
       setPreview(gatewayUrl);
       setSuccess(t("avatar_upload_success") || "Avatar uploaded successfully");
@@ -383,6 +387,13 @@ const ProfileEditModal = ({ userInfo, onClose, onSaved }) => {
       // The correct way to represent "no bio" is to omit the field
       // entirely (undefined), same as we already do for `picture`.
       const trimmedBio = updates.bio ? updates.bio.trim() : "";
+
+      // ADDED: name and bio are public text on Lens too — screen them like
+      // any other publication (see utils/aiModeration.js).
+      await assertPublishAllowed({
+        text: [displayName, trimmedBio].filter(Boolean).join("\n"),
+        kind: "profile",
+      });
 
       const metadata = accountMetadata({
         name: displayName,

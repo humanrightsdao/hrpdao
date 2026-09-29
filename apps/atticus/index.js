@@ -2,6 +2,19 @@
 import express from "express";
 import cors from "cors";
 import dotenv from "dotenv";
+import {
+  parseModerationRequest,
+  moderateItems,
+  createMemoryCache,
+  createRateLimiter,
+  isAllowedOrigin,
+  parseAllowedOrigins,
+  summarizeResults,
+  parseMediaRequest,
+  moderateMediaItems,
+  MEDIA_LIMITS,
+  PROMPT_VERSION,
+} from "./moderation.js";
 
 dotenv.config();
 
@@ -10,8 +23,36 @@ const PORT = process.env.PORT || 3005;
 const API_KEY = process.env.GEMINI_API_KEY;
 const MODEL = "gemini-3-flash-preview";
 
+// ── AI moderation settings (see moderation.js and ../AI_MODERATION.md) ────
+// A SEPARATE Gemini key/project for moderation is recommended, so a burst of
+// scans can't exhaust the quota the chat depends on. Falls back to API_KEY.
+const MODERATION_API_KEY = process.env.GEMINI_MODERATION_API_KEY || API_KEY;
+const MODERATION_MODEL = process.env.MODERATION_MODEL || MODEL;
+const MODERATION_ENABLED = process.env.MODERATION_ENABLED !== "false";
+// The Vite dev server (any of its usual ports) calls this server through its
+// /api proxy; the browser's Origin is the Vite one, not this server's.
+const MODERATION_ALLOWED_ORIGINS = [
+  "http://localhost:5173",
+  "http://localhost:5174",
+  "http://localhost:5175",
+  "http://127.0.0.1:5173",
+  "http://127.0.0.1:5174",
+  ...parseAllowedOrigins(process.env.MODERATION_ALLOWED_ORIGINS),
+];
+const moderationCache = createMemoryCache();
+// Items (not requests) per minute per IP.
+const moderationLimiter = createRateLimiter({ limit: 240, windowMs: 60 * 1000 });
+
+// ── AI media moderation ("Atticus Guard", images/video/PDF) ────────────────
+const MODERATION_MEDIA_MODEL = process.env.MODERATION_MEDIA_MODEL || MODERATION_MODEL;
+const mediaCache = createMemoryCache();
+// Bytes, not items: media is heavy, so the limit is on data volume per IP.
+const mediaLimiter = createRateLimiter({ limit: 60 * 1024 * 1024, windowMs: 60 * 1000 });
+// Express's json() body-size limit already rejects an over-large request before
+// this handler runs (see app.use(express.json(...)) below).
+
 app.use(cors());
-app.use(express.json({ limit: "1mb" }));
+app.use(express.json({ limit: "24mb" })); // media moderation needs room for base64 images/PDFs (see MEDIA_LIMITS.maxBodyBytes)
 
 if (!API_KEY) {
   console.error(
@@ -329,8 +370,126 @@ app.post("/api/chat/stream", async (req, res) => {
   }
 });
 
+// ---------- AI content moderation ("Atticus Guard") ----------
+// POST /api/moderate  { items: [{ id?, kind, text, context? }] }
+//   → { success, model, promptVersion, results: [{ id, verdict, severity,
+//        confidence, categories, reason, source, degraded? }] }
+// Mirrors the Cloudflare Worker's route (worker/index.js in the Dossier repo).
+app.post("/api/moderate", async (req, res) => {
+  res.setHeader("Cache-Control", "no-store");
+
+  const requestUrl = `${req.protocol}://${req.get("host")}${req.originalUrl}`;
+  if (!isAllowedOrigin(req.get("origin"), requestUrl, MODERATION_ALLOWED_ORIGINS)) {
+    return res.status(403).json({ success: false, error: "forbidden_origin" });
+  }
+
+  const parsed = parseModerationRequest(req.body);
+  if (!parsed.ok) {
+    return res.status(parsed.status).json({ success: false, error: parsed.error });
+  }
+
+  if (!MODERATION_ENABLED) {
+    return res.json({ success: true, disabled: true, results: [] });
+  }
+
+  const limit = moderationLimiter.take(req.ip || "unknown", parsed.items.length);
+  if (!limit.ok) {
+    res.setHeader("Retry-After", String(limit.retryAfterSec));
+    return res
+      .status(429)
+      .json({ success: false, error: "rate_limited", retryAfterSec: limit.retryAfterSec });
+  }
+
+  try {
+    const startedAt = Date.now();
+    const results = await moderateItems(parsed.items, {
+      apiKey: MODERATION_API_KEY,
+      model: MODERATION_MODEL,
+      cache: moderationCache,
+    });
+    // Counts only — never the user's text.
+    console.log(
+      `🛡️ moderation: ${parsed.items.length} item(s) → ${summarizeResults(results)} (${Date.now() - startedAt}ms)`,
+    );
+    res.json({
+      success: true,
+      model: MODERATION_MODEL,
+      promptVersion: PROMPT_VERSION,
+      results: results.map((r, i) => ({ id: parsed.ids[i], ...r })),
+    });
+  } catch (error) {
+    // moderateItems() fails open by itself; this is a last-resort guard.
+    console.error("Moderation error:", error);
+    res.status(500).json({ success: false, error: "moderation_failed" });
+  }
+});
+
+// POST /api/moderate/media  { items: [{ id?, kind: "image"|"video"|"pdf", parts: [{ mime, data (base64) }] }] }
+// Mirrors the Cloudflare Worker's route. The browser downscales images and
+// samples video frames first (see src/utils/aiMediaPrep.js), so this handler
+// only ever sees a handful of small, already-capped files.
+app.post("/api/moderate/media", async (req, res) => {
+  res.setHeader("Cache-Control", "no-store");
+
+  const requestUrl = `${req.protocol}://${req.get("host")}${req.originalUrl}`;
+  if (!isAllowedOrigin(req.get("origin"), requestUrl, MODERATION_ALLOWED_ORIGINS)) {
+    return res.status(403).json({ success: false, error: "forbidden_origin" });
+  }
+
+  const parsed = parseMediaRequest(req.body);
+  if (!parsed.ok) {
+    return res.status(parsed.status).json({ success: false, error: parsed.error });
+  }
+
+  if (!MODERATION_ENABLED) {
+    return res.json({ success: true, disabled: true, results: [] });
+  }
+
+  const requestBytes = parsed.items.reduce(
+    (sum, it) => sum + it.parts.reduce((s, p) => s + Math.floor((p.data.length * 3) / 4), 0),
+    0,
+  );
+  const limit = mediaLimiter.take(req.ip || "unknown", requestBytes);
+  if (!limit.ok) {
+    res.setHeader("Retry-After", String(limit.retryAfterSec));
+    return res
+      .status(429)
+      .json({ success: false, error: "rate_limited", retryAfterSec: limit.retryAfterSec });
+  }
+
+  try {
+    const startedAt = Date.now();
+    const results = await moderateMediaItems(parsed.items, {
+      apiKey: MODERATION_API_KEY,
+      model: MODERATION_MEDIA_MODEL,
+      cache: mediaCache,
+    });
+    console.log(
+      `🛡️ media moderation: ${parsed.items.length} file(s), ${(requestBytes / 1024).toFixed(0)}KB → ${summarizeResults(results)} (${Date.now() - startedAt}ms)`,
+    );
+    res.json({
+      success: true,
+      model: MODERATION_MEDIA_MODEL,
+      promptVersion: PROMPT_VERSION,
+      results: results.map((r, i) => ({ id: parsed.ids[i], ...r })),
+    });
+  } catch (error) {
+    console.error("Media moderation error:", error);
+    res.status(500).json({ success: false, error: "moderation_failed" });
+  }
+});
+
 app.get("/api/health", (req, res) => {
-  res.json({ status: "ok", model: MODEL });
+  res.json({
+    status: "ok",
+    model: MODEL,
+    moderation: {
+      enabled: MODERATION_ENABLED,
+      configured: Boolean(MODERATION_API_KEY),
+      promptVersion: PROMPT_VERSION,
+      media: true,
+    },
+  });
 });
 
 app.listen(PORT, () => {

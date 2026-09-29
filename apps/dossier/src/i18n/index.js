@@ -54,6 +54,9 @@ i18n
   .use(initReactI18next)
   .init({
     resources,
+    // ADDED: i18next prints a "made possible by our own product, Locize"
+    // promo banner to the console on init — turn it off (official option).
+    showSupportNotice: false,
     fallbackLng: "en",
     // FIXED: without this, the browser-detected language (via
     // navigator) is usually a full locale like "uk-UA", not "uk".

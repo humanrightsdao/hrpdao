@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { BookOpen, ExternalLink, ChevronDown, FileText, Sigma, Feather, Library, FileCode2 } from "lucide-react";
+import { usePolicyLink } from "../hooks/usePolicyLink";
 
 // ── Project document types ──────────────────────────────────
 // Explains the difference between Whitepaper/Yellow Paper/Litepaper/
@@ -14,8 +15,17 @@ const DOCUMENT_TYPES = [
   { key: "spec", icon: FileCode2, url: "#" },
 ];
 
+// "policy" no longer hardcodes a static IPFS CID here — that link went
+// stale as soon as governance ratified a newer version of the policy on
+// chain. It's now read live via usePolicyLink() (same approach as the
+// dossier app's Navbar.jsx) and merged into this list at render time.
+// This fallback CID is only used for the brief moment before the
+// on-chain read resolves, or if it fails.
+const POLICY_FALLBACK_URL =
+  "https://ipfs.io/ipfs/QmfZ4Qg1XiR6Y1Lnm4fnykWi6EhpwmkVSzzVNiiQS6YMSF/";
+
 const MATERIALS = [
-  { key: "policy", url: "https://ipfs.io/ipfs/QmfZ4Qg1XiR6Y1Lnm4fnykWi6EhpwmkVSzzVNiiQS6YMSF/" },
+  { key: "policy", url: null },
   { key: "governor", url: "#" },
   { key: "discipline", url: "#" },
   { key: "verification", url: "#" },
@@ -24,6 +34,10 @@ const MATERIALS = [
 export default function DocsPage() {
   const { t } = useTranslation();
   const [openType, setOpenType] = useState(0);
+  const policyLink = usePolicyLink();
+  const materials = MATERIALS.map((m) =>
+    m.key === "policy" ? { ...m, url: policyLink || POLICY_FALLBACK_URL } : m,
+  );
 
   return (
     <div className="fade-rise max-w-2xl">
@@ -92,7 +106,7 @@ export default function DocsPage() {
         {t("dao.docs.materials")}
       </h2>
       <div className="space-y-2">
-        {MATERIALS.map((d) => {
+        {materials.map((d) => {
           const title = t(`dao.docs.materialsList.${d.key}.title`);
           const desc = t(`dao.docs.materialsList.${d.key}.desc`);
           return (

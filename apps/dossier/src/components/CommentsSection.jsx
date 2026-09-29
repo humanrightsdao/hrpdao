@@ -24,10 +24,30 @@
 //   isCommentOwner(comment)  — whether this comment belongs to the current user
 //   getCountryDisplayName(code) — the same helper used on the pages
 //   formatDate(iso)      — the same date-formatting helper
+//
+// Optional moderation props (only the author of the post/violation/request
+// being commented on can use them — Lens enforces that server-side):
+//   canModerateComments      — show "Hide" and the "Hidden comments" section
+//   onHideComment(id)        — hide a comment (Lens hideReply); returns {success}
+//   onUnhideComment(id)      — restore a hidden comment (Lens unhideReply)
+//   onLoadHiddenComments()   — load the hidden comments (called when the
+//                              "Hidden comments" section is opened)
+//   hiddenComments           — the array of hidden comments
+//   loadingHidden            — bool, whether hidden comments are loading
+//
+// Comments posted through a different Lens app (comment.is_external_app)
+// get an "External Lens app" badge.
+//
+// Clicking a comment author's avatar or name navigates to their public
+// profile (/user/:userId) — same as clicking a post author in the feed.
 
-import React, { useState, useRef, useEffect, useCallback } from "react";
+import React, { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";
+import { useNavigate } from "react-router-dom";
+// ADDED: display-time AI moderation ("Atticus Guard") — see AI_MODERATION.md.
+import { useAIVerdicts } from "../hooks/useAIVerdicts";
+import { isFlagged, primaryCategoryLabel } from "../utils/aiModeration";
 import EmojiPicker, { Theme as EmojiTheme } from "emoji-picker-react";
 import {
   MessageCircle,
@@ -42,6 +62,9 @@ import {
   File,
   X,
   Maximize2,
+  ExternalLink,
+  EyeOff,
+  RotateCcw,
 } from "lucide-react";
 
 // ADDED: the same limits as in CreatePostModal.jsx — up to 4 files,
@@ -77,10 +100,41 @@ export default function CommentsSection({
   isCommentOwner,
   getCountryDisplayName,
   formatDate,
+  canModerateComments = false,
+  onHideComment,
+  onUnhideComment,
+  onLoadHiddenComments,
+  hiddenComments = [],
+  loadingHidden = false,
+  // ADDED: the text of the post/violation/request being commented on.
+  // Lets the AI judge relevance (a generic copy-paste reply that says
+  // nothing about the post is bot-like spam).
+  moderationContext = "",
 }) {
   const { t } = useTranslation();
+  const navigate = useNavigate();
+
+  // ADDED: AI verdicts for the comments on screen. A "flag"/"block" verdict
+  // collapses that comment's body behind a notice with a "Show anyway"
+  // button — nothing is deleted or hidden for good, and a comment with no
+  // verdict yet (loading, service down, too short) renders normally.
+  const aiItems = useMemo(
+    () =>
+      comments.map((c) => ({
+        id: c.id,
+        kind: "comment",
+        text: c.content || "",
+        context: moderationContext,
+      })),
+    [comments, moderationContext],
+  );
+  const aiVerdicts = useAIVerdicts(aiItems);
+  const [revealedAI, setRevealedAI] = useState(() => new Set());
   const [commentInput, setCommentInput] = useState("");
   const [showCommentMenu, setShowCommentMenu] = useState(null);
+  // ADDED: hide/restore UI state.
+  const [showHidden, setShowHidden] = useState(false);
+  const [actionError, setActionError] = useState("");
 
   // ADDED: a fullscreen view of a comment's media (clicking an image /
   // the video-expand button) — previously a comment's image/video was
@@ -267,6 +321,102 @@ export default function CommentsSection({
     onReportComment(comment);
   };
 
+  // ADDED: open the public profile of a comment's author — the same
+  // route ("/user/:userId") and the same identifier (the Lens Account
+  // address) that PostCard's onAuthorClick uses for the post author in
+  // the feed (post.lens_user_id || post.user_id === comment.author.id,
+  // see useLensComments.js). Previously the name/avatar in a comment
+  // were plain non-clickable elements.
+  const getCommentAuthorId = (comment) =>
+    comment.author?.id || comment.author?.wallet_address || null;
+
+  const openAuthorProfile = (comment) => {
+    const authorId = getCommentAuthorId(comment);
+    if (authorId) navigate(`/user/${authorId}`);
+  };
+
+  // ADDED: hide a comment (post author only). Hidden comments disappear
+  // for everyone and can be restored from the "Hidden comments" section.
+  const handleHide = async (commentId) => {
+    setShowCommentMenu(null);
+    if (
+      !window.confirm(
+        t(
+          "confirm_hide_comment",
+          "Hide this comment for everyone? You can restore it later from “Hidden comments”.",
+        ),
+      )
+    ) {
+      return;
+    }
+    setActionError("");
+    const res = await onHideComment?.(commentId);
+    if (res && !res.success) {
+      setActionError(
+        t(
+          "comment_action_failed",
+          "Couldn't complete the action. Please try again.",
+        ),
+      );
+    }
+  };
+
+  const handleUnhide = async (commentId) => {
+    setActionError("");
+    const res = await onUnhideComment?.(commentId);
+    if (res && !res.success) {
+      setActionError(
+        t(
+          "comment_action_failed",
+          "Couldn't complete the action. Please try again.",
+        ),
+      );
+    }
+  };
+
+  const toggleHiddenSection = () => {
+    const next = !showHidden;
+    setShowHidden(next);
+    if (next) onLoadHiddenComments?.();
+  };
+
+  // ADDED: the "External Lens app" marker — Lens is an open protocol, so
+  // comments can come from accounts that never used this app. Only the
+  // icon is shown inline; the label (+ short explanation) appears in a
+  // tooltip on hover. It is also focusable (keyboard / tap on touch
+  // screens, where there is no hover) and has an aria-label for screen
+  // readers. The tooltip opens BELOW the icon: the section root has
+  // overflow-hidden, so an upward tooltip on the first comment could
+  // otherwise be clipped.
+  const externalLabel = t("external_lens_app", "External Lens app");
+  const externalBadge = (
+    <span
+      className="group relative inline-flex flex-shrink-0"
+      tabIndex={0}
+      role="img"
+      aria-label={externalLabel}
+      onClick={(e) => e.currentTarget.focus()}
+    >
+      <span className="inline-flex items-center justify-center w-[18px] h-[18px] rounded bg-amber-100 dark:bg-amber-900/20 border border-amber-300/60 dark:border-amber-700/25 text-amber-700 dark:text-amber-400/75 cursor-help">
+        <ExternalLink className="w-3 h-3" />
+      </span>
+      <span
+        role="tooltip"
+        className="pointer-events-none absolute left-0 top-full mt-1 z-20 hidden group-hover:block group-focus:block w-max max-w-[220px] rounded-lg border border-slate-300 dark:border-white/[0.1] bg-white dark:bg-[#000d1f] shadow-lg px-2.5 py-1.5"
+      >
+        <span className="block text-[11px] font-medium text-amber-700 dark:text-amber-400/80">
+          {externalLabel}
+        </span>
+        <span className="block mt-0.5 text-[11px] leading-snug text-slate-500 dark:text-white/40 whitespace-normal">
+          {t(
+            "external_lens_app_hint",
+            "This comment was posted through a different Lens app, not this one",
+          )}
+        </span>
+      </span>
+    </span>
+  );
+
   return (
     <div
       id="comments-section"
@@ -277,6 +427,21 @@ export default function CommentsSection({
           {t("comments") || "Comments"} ({comments.length})
         </h3>
       </div>
+
+      {actionError && (
+        <div className="flex items-center justify-between px-4 py-2 bg-red-500/[0.07] border-b border-red-500/20">
+          <p className="text-[12px] text-red-500 dark:text-red-400/75">
+            {actionError}
+          </p>
+          <button
+            type="button"
+            onClick={() => setActionError("")}
+            className="p-1 -mr-1 text-slate-600 dark:text-white/40 hover:text-slate-800 dark:hover:text-white/50 ml-2"
+          >
+            <X className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      )}
 
       {/* Comment input */}
       {lensProfile && (
@@ -528,6 +693,10 @@ export default function CommentsSection({
             const commentAuthorInitial = (commentAuthorName ||
               "U")[0].toUpperCase();
             const commentAuthorCountry = comment.author?.country;
+            const commentAuthorId = getCommentAuthorId(comment);
+            const aiVerdict = aiVerdicts.get(comment.id);
+            const aiCollapsed =
+              isFlagged(aiVerdict) && !revealedAI.has(comment.id);
 
             return (
               <div
@@ -535,8 +704,15 @@ export default function CommentsSection({
                 className="p-4 hover:bg-slate-50 dark:hover:bg-white/[0.02] transition-colors"
               >
                 <div className="flex items-start gap-2.5">
-                  {/* Avatar */}
-                  <div className="flex-shrink-0">
+                  {/* Avatar — click opens the author's public profile */}
+                  <button
+                    type="button"
+                    onClick={() => openAuthorProfile(comment)}
+                    disabled={!commentAuthorId}
+                    aria-label={commentAuthorName}
+                    title={commentAuthorName}
+                    className="flex-shrink-0 p-0 bg-transparent border-0 enabled:cursor-pointer enabled:hover:opacity-85 transition-opacity disabled:cursor-default"
+                  >
                     <div className="relative w-[40px] h-[44px] p-[1.5px] clip-path-hexagon bg-gradient-to-br from-[#e8a0b0] to-[#2B000A]">
                       <div className="relative w-full h-full overflow-hidden bg-[#0d0415] clip-path-hexagon">
                         {commentAuthorAvatar ? (
@@ -561,14 +737,19 @@ export default function CommentsSection({
                         </div>
                       </div>
                     </div>
-                  </div>
+                  </button>
 
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center justify-between mb-1">
                       <div className="flex items-center gap-2 flex-wrap">
-                        <span className="text-[13px] font-medium text-slate-700 dark:text-white/70">
+                        <button
+                          type="button"
+                          onClick={() => openAuthorProfile(comment)}
+                          disabled={!commentAuthorId}
+                          className="text-[13px] font-medium text-slate-700 dark:text-white/70 text-left enabled:cursor-pointer enabled:hover:text-slate-950 dark:enabled:hover:text-white/95 enabled:hover:underline transition-colors disabled:cursor-default"
+                        >
                           {commentAuthorName}
-                        </span>
+                        </button>
                         {commentAuthorHandle && (
                           <span className="text-[11px] text-slate-600 dark:text-white/25">
                             {commentAuthorHandle}
@@ -577,6 +758,7 @@ export default function CommentsSection({
                         <span className="text-[11px] px-1.5 py-0.5 rounded bg-blue-100 dark:bg-blue-900/25 border border-blue-300/50 dark:border-blue-700/20 text-blue-700 dark:text-blue-400/65">
                           {getCountryDisplayName(commentAuthorCountry)}
                         </span>
+                        {comment.is_external_app && externalBadge}
                         <span className="text-[11px] text-slate-600 dark:text-white/20">
                           {formatDate(comment.created_at)}
                         </span>
@@ -598,7 +780,7 @@ export default function CommentsSection({
                             <MoreVertical className="w-4 h-4 text-slate-500 dark:text-white/20" />
                           </button>
                           {showCommentMenu === comment.id && (
-                            <div className="absolute right-0 mt-1 w-32 bg-white dark:bg-[#000d1f] border border-slate-300 dark:border-white/[0.1] rounded-lg shadow-lg z-10 p-1">
+                            <div className="absolute right-0 mt-1 w-44 bg-white dark:bg-[#000d1f] border border-slate-300 dark:border-white/[0.1] rounded-lg shadow-lg z-10 p-1">
                               {isCommentOwner(comment) ? (
                                 <button
                                   onClick={() => handleDelete(comment.id)}
@@ -608,13 +790,25 @@ export default function CommentsSection({
                                   {t("delete") || "Delete"}
                                 </button>
                               ) : (
-                                <button
-                                  onClick={() => handleReport(comment)}
-                                  className="w-full px-3 py-2 text-left text-[12px] text-red-500 dark:text-red-400/70 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-500/10 rounded-md flex items-center gap-2 transition-colors"
-                                >
-                                  <Flag className="w-3.5 h-3.5" />
-                                  {t("report") || "Report"}
-                                </button>
+                                <>
+                                  {/* ADDED: hide — post author only */}
+                                  {canModerateComments && onHideComment && (
+                                    <button
+                                      onClick={() => handleHide(comment.id)}
+                                      className="w-full px-3 py-2 text-left text-[12px] text-slate-600 dark:text-white/55 hover:text-slate-900 dark:hover:text-white/80 hover:bg-slate-100 dark:hover:bg-white/[0.05] rounded-md flex items-center gap-2 transition-colors"
+                                    >
+                                      <EyeOff className="w-3.5 h-3.5" />
+                                      {t("hide_comment", "Hide")}
+                                    </button>
+                                  )}
+                                  <button
+                                    onClick={() => handleReport(comment)}
+                                    className="w-full px-3 py-2 text-left text-[12px] text-red-500 dark:text-red-400/70 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-500/10 rounded-md flex items-center gap-2 transition-colors"
+                                  >
+                                    <Flag className="w-3.5 h-3.5" />
+                                    {t("report") || "Report"}
+                                  </button>
+                                </>
                               )}
                             </div>
                           )}
@@ -622,6 +816,32 @@ export default function CommentsSection({
                       )}
                     </div>
 
+                    {aiCollapsed ? (
+                      <div
+                        title={aiVerdict?.reason || undefined}
+                        className="mb-1 flex items-center justify-between gap-3 rounded-lg border border-amber-300/60 dark:border-amber-700/25 bg-amber-50 dark:bg-amber-900/10 px-3 py-2.5"
+                      >
+                        <p className="text-[12px] leading-snug text-amber-800 dark:text-amber-300/80">
+                          {t("ai_moderation_comment_flagged", {
+                            category: primaryCategoryLabel(aiVerdict),
+                            defaultValue:
+                              "⚠️ Atticus AI flagged this comment automatically (reason: {{category}}). It is awaiting human review.",
+                          })}
+                        </p>
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setRevealedAI((prev) => new Set(prev).add(comment.id))
+                          }
+                          className="flex-shrink-0 px-2.5 py-1 text-[11px] rounded-md bg-slate-200 dark:bg-white/10 text-slate-800 dark:text-white/75 hover:bg-slate-300 dark:hover:bg-white/20 transition-colors"
+                        >
+                          {t("ai_moderation_show_anyway", {
+                            defaultValue: "Show anyway",
+                          })}
+                        </button>
+                      </div>
+                    ) : (
+                      <>
                     {comment.content && (
                       <p className="text-[13px] text-slate-600 dark:text-white/55 leading-relaxed whitespace-pre-wrap mb-2">
                         {comment.content}
@@ -726,6 +946,8 @@ export default function CommentsSection({
                         )}
                       </button>
                     </div>
+                      </>
+                    )}
                   </div>
                 </div>
               </div>
@@ -733,6 +955,84 @@ export default function CommentsSection({
           })
         )}
       </div>
+
+      {/* ADDED: hidden comments — visible to (and restorable by) the
+          author of the post only */}
+      {canModerateComments && onLoadHiddenComments && (
+        <div className="border-t border-slate-100 dark:border-white/[0.06]">
+          <button
+            type="button"
+            onClick={toggleHiddenSection}
+            className="w-full flex items-center gap-2 px-4 py-2.5 text-[12px] text-slate-600 dark:text-white/40 hover:bg-slate-50 dark:hover:bg-white/[0.02] hover:text-slate-800 dark:hover:text-white/60 transition-colors"
+          >
+            <EyeOff className="w-3.5 h-3.5" />
+            <span>
+              {t("hidden_comments", "Hidden comments")}
+              {showHidden || hiddenComments.length > 0
+                ? ` (${hiddenComments.length})`
+                : ""}
+            </span>
+          </button>
+
+          {showHidden && (
+            <div className="divide-y divide-slate-100 dark:divide-white/[0.05]">
+              {loadingHidden && hiddenComments.length === 0 ? (
+                <p className="px-4 py-4 text-[12px] text-slate-500 dark:text-white/25">
+                  {t("loading", "Loading...")}
+                </p>
+              ) : hiddenComments.length === 0 ? (
+                <p className="px-4 py-4 text-[12px] text-slate-500 dark:text-white/25">
+                  {t("no_hidden_comments", "No hidden comments")}
+                </p>
+              ) : (
+                hiddenComments.map((comment) => {
+                  const name =
+                    comment.author?.name ||
+                    comment.author?.unique_name ||
+                    t("anonymous");
+                  return (
+                    <div
+                      key={comment.id}
+                      className="px-4 py-3 flex items-start gap-3 bg-slate-50/70 dark:bg-white/[0.015]"
+                    >
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap mb-0.5">
+                          <button
+                            type="button"
+                            onClick={() => openAuthorProfile(comment)}
+                            className="text-[12px] font-medium text-slate-700 dark:text-white/60 hover:underline text-left"
+                          >
+                            {name}
+                          </button>
+                          {comment.author?.unique_name && (
+                            <span className="text-[11px] text-slate-500 dark:text-white/25">
+                              @{comment.author.unique_name}
+                            </span>
+                          )}
+                          {comment.is_external_app && externalBadge}
+                        </div>
+                        {comment.content && (
+                          <p className="text-[12px] text-slate-500 dark:text-white/40 leading-relaxed whitespace-pre-wrap line-clamp-3">
+                            {comment.content}
+                          </p>
+                        )}
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => handleUnhide(comment.id)}
+                        className="flex-shrink-0 flex items-center gap-1.5 px-2.5 py-1.5 text-[11px] rounded-[6px] bg-slate-100 dark:bg-white/[0.04] text-slate-700 dark:text-white/50 hover:bg-slate-200 dark:hover:bg-white/[0.08] transition-colors"
+                      >
+                        <RotateCcw className="w-3 h-3" />
+                        {t("restore_comment", "Restore")}
+                      </button>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* ADDED: fullscreen view of a comment's media */}
       {lightboxMedia &&

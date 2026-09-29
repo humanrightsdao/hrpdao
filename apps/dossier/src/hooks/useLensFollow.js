@@ -1,6 +1,11 @@
 // src/hooks/useLensFollow.js
 import { useState, useEffect, useCallback } from "react";
 import { lensClient } from "../lib/lens";
+// ADDED: follow/unfollow only return an operation — it still has to be
+// signed and sent (see lib/lensTransaction.js). The wallet comes from
+// the auth context, the same way useLensPosts callers get theirs.
+import { useLensAuth } from "../context/LensAuthContext";
+import { sendLensOperation } from "../lib/lensTransaction";
 import {
   fetchFollowStatus,
   follow,
@@ -29,6 +34,7 @@ async function getSessionClient() {
 }
 
 export function useLensFollow(targetAddress) {
+  const { getWalletClient } = useLensAuth();
   const [isFollowing, setIsFollowing] = useState(false);
   const [loading, setLoading] = useState(false);
   const [checking, setChecking] = useState(true);
@@ -127,31 +133,29 @@ export function useLensFollow(targetAddress) {
       // localStorage.lens_account_address (особливо при кількох
       // AccountOwned на один гаманець — перемикання активного акаунту
       // в UI могло не переавторизувати сесію).
-      console.log("🔍 useLensFollow: follow буде від імені", {
-        sessionAddress: userResult.value?.address,
-        targetAddress,
-      });
 
+      // FIXED: follow()/unfollow() only build an "operation"
+      // (SponsoredTransactionRequest / SelfFundedTransactionRequest /
+      // TransactionWillFail). Previously it was never signed or sent —
+      // the state was just flipped optimistically, so nothing actually
+      // happened on Lens. sendLensOperation() now does what
+      // useLensPosts does for posts: handleOperationWith(walletClient)
+      // -> txHash -> wait for indexing. The UI state flips only after
+      // the transaction was really sent; any failure (wallet rejected,
+      // Lens refused, TransactionWillFail ...) is thrown and shown via
+      // `error` instead.
       const action = isFollowing ? unfollow : follow;
-      const result = await action(sessionClient, { account: targetAddress });
-
-      if (result.isErr()) {
-        console.error("❌ Lens follow/unfollow error:", result.error.message);
-        setError(result.error.message);
-        return;
+      const { indexed } = await sendLensOperation({
+        sessionClient,
+        getWalletClient,
+        action: () => action(sessionClient, { account: targetAddress }),
+      });
+      if (!indexed) {
+        console.warn(
+          "⚠️ useLensFollow: транзакцію відправлено, але Lens ще не проіндексував її — статус може оновитись із затримкою",
+        );
       }
 
-      // ВАЖЛИВО: follow/unfollow повертає або підтверджену транзакцію,
-      // або один з варіантів "operation"-відповіді Lens SDK
-      // (SponsoredTransactionRequest / SelfFundedTransactionRequest /
-      // TransactionWillFail) — її ще треба прокинути через
-      // handleOperationWith(walletClient) з "@lens-protocol/client/viem"
-      // (або еквівалент для вашого signer), щоб реально підписати й
-      // дочекатись виконання on-chain. Той самий TODO, що й у
-      // useLensBlock.js — без видимого файлу з налаштуванням
-      // гаманця/signer цього проєкту тут не можна точно підставити
-      // правильний walletClient. Поки що стан оновлюється оптимістично
-      // одразу після успішного виклику дії.
       setIsFollowing((prev) => !prev);
     } catch (e) {
       console.error("❌ useLensFollow toggleFollow exception:", e);
@@ -159,7 +163,7 @@ export function useLensFollow(targetAddress) {
     } finally {
       setLoading(false);
     }
-  }, [targetAddress, isFollowing]);
+  }, [targetAddress, isFollowing, getWalletClient]);
 
   return { isFollowing, toggleFollow, loading, checking, error };
 }

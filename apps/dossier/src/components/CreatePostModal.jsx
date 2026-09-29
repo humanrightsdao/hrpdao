@@ -280,6 +280,7 @@ const CreatePostModal = ({ onClose }) => {
     const rateCheck = await checkPostRateLimit(
       myAddressForLimit,
       content.trim(),
+      { kind: "post" },
     );
     if (!rateCheck.allowed) {
       setSubmitError(rateCheck.reason);

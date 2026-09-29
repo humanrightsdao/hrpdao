@@ -49,6 +49,8 @@ import { normalizeLensPost } from "../hooks/useLensPosts";
 // point to a nonexistent src/utils/utils/postReports.js).
 import { isReportComment } from "./postReports";
 import { isModActionComment } from "./moderationActions";
+// ADDED: third safeguard — AI content moderation (see aiModeration.js).
+import { checkBeforePublish, isAIModerationEnabled } from "./aiModeration";
 
 // ── Rate limit - one shared counter for all content types ──────────────
 // Windows are checked in order from shortest - the first violated window
@@ -216,7 +218,7 @@ function findDuplicateContent(recentEntries, newContent) {
  *   {allowed: false, reason: string, retryAfterMs?: number, windowLabel?: string, isDuplicate?: boolean, duplicateMatch?: object}
  * >}
  */
-export async function checkPostRateLimit(walletAddress, content = null, { isRestricted = false } = {}) {
+async function checkRateLimitAndDuplicates(walletAddress, content = null, { isRestricted = false } = {}) {
   if (!walletAddress) return { allowed: true };
 
   // â ï¸ SYNCED WITH THE DAO APP: an on-chain DisciplineModule
@@ -338,4 +340,51 @@ export function formatRetryAfter(retryAfterMs) {
   if (minutes < 60) return `${minutes} min`;
   const hours = Math.ceil(minutes / 60);
   return `${hours}h`;
+}
+
+/**
+ * THE gate every publication goes through (regular post, violation, help
+ * request, comment) — the same call sites that always used it, now with a
+ * third safeguard. In order (cheapest first):
+ *
+ *   1. an active on-chain sanction blocks posting        (local)
+ *   2. posting rate limit + duplicate-text protection    (one Lens read)
+ *   3. AI content moderation, "Atticus Guard"            (one small request)
+ *
+ * The AI step only refuses CLEAR violations (scams/phishing, hate,
+ * threats, doxxing, sexual content, child-safety ...) — verdict "block".
+ * Borderline content ("flag") is published, and is blurred for readers
+ * until a moderator has looked (see useAIVerdicts / computeModerationState).
+ * If the AI service is slow, down or rate-limited, step 3 is skipped
+ * (fail open) — it can never stop a legitimate publication.
+ *
+ * @param {string|null} walletAddress
+ * @param {string|null} content
+ * @param {object} [options]
+ * @param {boolean} [options.isRestricted]  dao.isRestricted
+ * @param {"post"|"comment"|"violation"|"help_request"|"profile"} [options.kind="post"]
+ * @param {string} [options.context]  for comments: the text of the post being
+ *   replied to (lets the AI tell relevant replies from copy-paste bot spam).
+ * @returns {Promise<{allowed:true, moderation?:object} |
+ *                   {allowed:false, reason:string, isModeration?:true, moderation?:object, ...}>}
+ *   `reason` is a ready-to-show message in every case.
+ */
+export async function checkPostRateLimit(walletAddress, content = null, options = {}) {
+  const { kind = "post", context = "", isRestricted = false } = options;
+
+  const base = await checkRateLimitAndDuplicates(walletAddress, content, { isRestricted });
+  if (!base.allowed) return base;
+
+  if (!content || !isAIModerationEnabled()) return base;
+
+  const guard = await checkBeforePublish({ text: content, kind, context });
+  if (!guard.allowed) {
+    return {
+      allowed: false,
+      isModeration: true,
+      reason: guard.reason,
+      moderation: guard.result,
+    };
+  }
+  return guard.result ? { ...base, moderation: guard.result } : base;
 }

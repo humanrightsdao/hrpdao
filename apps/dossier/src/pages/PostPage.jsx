@@ -193,6 +193,11 @@ const PostPage = () => {
     deleteComment,
     reactToComment,
     isCommentOwner,
+    hiddenComments,
+    loadingHidden,
+    hideComment,
+    unhideComment,
+    loadHiddenComments,
   } = useLensComments(
     post?.lens_post_id,
     sessionClient,
@@ -206,12 +211,25 @@ const PostPage = () => {
   // and to the full field in CommentsSection - both simply call the same
   // postComment(), so it's enough to wrap it once here.
   const postCommentWithLimit = async (text, mediaFiles) => {
-    const rateCheck = await checkPostRateLimit(myAccountAddress, text, { isRestricted: dao.isRestricted });
+    const rateCheck = await checkPostRateLimit(myAccountAddress, text, {
+      isRestricted: dao.isRestricted,
+      kind: "comment",
+      context: post?.content || "",
+    });
     if (!rateCheck.allowed) {
       alert(rateCheck.reason);
       return;
     }
-    return postComment(text, mediaFiles);
+    // ADDED: surface a failure that happens AFTER the text gate — most
+    // importantly a blocked/unavailable media check (assertMediaPublishAllowed
+    // inside createLensComment), which previously had no visible feedback at
+    // all (the promise's rejection was only ever caught inside the hook,
+    // which just returns {success:false} — nobody displayed it).
+    const result = await postComment(text, mediaFiles);
+    if (result && result.success === false) {
+      alert(result.error);
+    }
+    return result;
   };
 
   // ── Moderation state (blur/hide/critical) ────────────────────────────
@@ -838,6 +856,16 @@ const PostPage = () => {
               isCommentOwner={isCommentOwner}
               getCountryDisplayName={getCountryDisplayName}
               formatDate={formatDate}
+              // ADDED: only the post's author can hide/restore comments
+              // ADDED: the post's text — lets the AI tell relevant replies
+              // from copy-paste bot boilerplate (display-time scan)
+              moderationContext={post?.content || ""}
+              canModerateComments={!!isOwner}
+              onHideComment={hideComment}
+              onUnhideComment={unhideComment}
+              onLoadHiddenComments={loadHiddenComments}
+              hiddenComments={hiddenComments}
+              loadingHidden={loadingHidden}
             />
           </div>
         )}

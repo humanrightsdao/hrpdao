@@ -1,6 +1,22 @@
 // worker/index.js
 // Cloudflare Worker version of server/index.js.
-// Serves /api/chat and /api/chat/stream, everything else falls through to static assets.
+// Serves /api/chat, /api/chat/stream and /api/moderate (AI content
+// moderation), plus /verify-captcha; everything else falls through to static assets.
+
+import {
+  parseModerationRequest,
+  moderateItems,
+  createMemoryCache,
+  createLayeredCache,
+  createRateLimiter,
+  isAllowedOrigin,
+  parseAllowedOrigins,
+  summarizeResults,
+  parseMediaRequest,
+  moderateMediaItems,
+  MEDIA_LIMITS,
+  PROMPT_VERSION,
+} from "./moderation.js";
 
 const MODEL = "gemini-3-flash-preview";
 
@@ -189,6 +205,178 @@ function json(data, status = 200) {
   return new Response(JSON.stringify(data), {
     status,
     headers: { "Content-Type": "application/json" },
+  });
+}
+
+// ── AI content moderation ("Atticus Guard") ────────────────────────────────
+// POST /api/moderate  { items: [{ id?, kind, text, context? }] }
+//   → { success, model, promptVersion, results: [{ id, verdict, severity,
+//        confidence, categories, reason, source, degraded? }] }
+// The engine lives in ./moderation.js (mirrored in server/moderation.js
+// for local dev). See AI_MODERATION.md for the policy and the setup.
+//
+// Optional configuration (all have safe defaults):
+//   GEMINI_MODERATION_API_KEY   a SEPARATE Gemini key/project for moderation,
+//                               so a burst of scans can't exhaust the quota
+//                               that the Atticus chat depends on. Falls back
+//                               to GEMINI_API_KEY.
+//   MODERATION_MODEL            model id override (default: same as chat).
+//   MODERATION_ENABLED="false"  kill switch — every item is answered "allow".
+//   MODERATION_KV               KV namespace binding: verdicts are cached
+//                               across isolates for 30 days (see wrangler.jsonc).
+//   MODERATION_ALLOWED_ORIGINS  comma-separated extra allowed Origins.
+//
+// Workers isolates are short-lived and per-location, so the in-memory cache
+// and rate limiter below are BEST EFFORT; KV makes the cache global.
+const moderationMemoryCache = createMemoryCache();
+// Items (not requests) per minute per IP — one page of comments is ~10-20.
+const moderationLimiter = createRateLimiter({ limit: 240, windowMs: 60 * 1000 });
+
+function moderationJson(data, status = 200, extraHeaders = {}) {
+  return new Response(JSON.stringify(data), {
+    status,
+    headers: {
+      "Content-Type": "application/json",
+      // Verdicts are per-content and cheap to recompute from our own cache;
+      // never let an intermediate cache keep a stale "allow".
+      "Cache-Control": "no-store",
+      ...extraHeaders,
+    },
+  });
+}
+
+async function handleModerate(request, env) {
+  if (
+    !isAllowedOrigin(
+      request.headers.get("Origin"),
+      request.url,
+      parseAllowedOrigins(env.MODERATION_ALLOWED_ORIGINS),
+    )
+  ) {
+    return moderationJson({ success: false, error: "forbidden_origin" }, 403);
+  }
+
+  let body;
+  try {
+    body = await request.json();
+  } catch {
+    return moderationJson({ success: false, error: "invalid_body" }, 400);
+  }
+
+  const parsed = parseModerationRequest(body);
+  if (!parsed.ok) {
+    return moderationJson({ success: false, error: parsed.error }, parsed.status);
+  }
+
+  if (env.MODERATION_ENABLED === "false") {
+    // Kill switch: the client treats an empty results list as "no opinion".
+    return moderationJson({ success: true, disabled: true, results: [] });
+  }
+
+  const ip = request.headers.get("CF-Connecting-IP") || "unknown";
+  const limit = moderationLimiter.take(ip, parsed.items.length);
+  if (!limit.ok) {
+    return moderationJson(
+      { success: false, error: "rate_limited", retryAfterSec: limit.retryAfterSec },
+      429,
+      { "Retry-After": String(limit.retryAfterSec) },
+    );
+  }
+
+  const model = env.MODERATION_MODEL || MODEL;
+  const cache = createLayeredCache(moderationMemoryCache, env.MODERATION_KV || null);
+  const startedAt = Date.now();
+  const results = await moderateItems(parsed.items, {
+    apiKey: env.GEMINI_MODERATION_API_KEY || env.GEMINI_API_KEY,
+    model,
+    cache,
+  });
+  // Visible with `npx wrangler tail`. Counts only — never the user's text.
+  console.log(
+    `🛡️ moderation: ${parsed.items.length} item(s) → ${summarizeResults(results)} (${Date.now() - startedAt}ms)`,
+  );
+
+  return moderationJson({
+    success: true,
+    model,
+    promptVersion: PROMPT_VERSION,
+    results: results.map((r, i) => ({ id: parsed.ids[i], ...r })),
+  });
+}
+
+// ── AI media moderation ("Atticus Guard", images/video/PDF) ────────────────
+// POST /api/moderate/media  { items: [{ id?, kind: "image"|"video"|"pdf", parts: [{ mime, data (base64) }] }] }
+//   → { success, model, promptVersion, results: [...] }
+// The browser does the heavy lifting first (downscaling images, sampling
+// video frames — see src/utils/aiMediaPrep.js) so this endpoint only ever
+// sees a handful of small, already-capped files. See AI_MODERATION.md.
+const mediaMemoryCache = createMemoryCache();
+// Bytes, not items: media is heavy, so the limit is on data volume per IP.
+const mediaLimiter = createRateLimiter({ limit: 60 * 1024 * 1024, windowMs: 60 * 1000 });
+
+async function handleModerateMedia(request, env) {
+  if (
+    !isAllowedOrigin(
+      request.headers.get("Origin"),
+      request.url,
+      parseAllowedOrigins(env.MODERATION_ALLOWED_ORIGINS),
+    )
+  ) {
+    return moderationJson({ success: false, error: "forbidden_origin" }, 403);
+  }
+
+  const declaredLength = Number(request.headers.get("Content-Length"));
+  if (Number.isFinite(declaredLength) && declaredLength > MEDIA_LIMITS.maxBodyBytes) {
+    return moderationJson({ success: false, error: "payload_too_large" }, 413);
+  }
+
+  let body;
+  try {
+    body = await request.json();
+  } catch {
+    return moderationJson({ success: false, error: "invalid_body" }, 400);
+  }
+
+  const parsed = parseMediaRequest(body);
+  if (!parsed.ok) {
+    return moderationJson({ success: false, error: parsed.error }, parsed.status);
+  }
+
+  if (env.MODERATION_ENABLED === "false") {
+    return moderationJson({ success: true, disabled: true, results: [] });
+  }
+
+  const ip = request.headers.get("CF-Connecting-IP") || "unknown";
+  const requestBytes = parsed.items.reduce(
+    (sum, it) => sum + it.parts.reduce((s, p) => s + Math.floor((p.data.length * 3) / 4), 0),
+    0,
+  );
+  const limit = mediaLimiter.take(ip, requestBytes);
+  if (!limit.ok) {
+    return moderationJson(
+      { success: false, error: "rate_limited", retryAfterSec: limit.retryAfterSec },
+      429,
+      { "Retry-After": String(limit.retryAfterSec) },
+    );
+  }
+
+  const model = env.MODERATION_MEDIA_MODEL || env.MODERATION_MODEL || MODEL;
+  const cache = createLayeredCache(mediaMemoryCache, env.MODERATION_KV || null);
+  const startedAt = Date.now();
+  const results = await moderateMediaItems(parsed.items, {
+    apiKey: env.GEMINI_MODERATION_API_KEY || env.GEMINI_API_KEY,
+    model,
+    cache,
+  });
+  console.log(
+    `🛡️ media moderation: ${parsed.items.length} file(s), ${(requestBytes / 1024).toFixed(0)}KB → ${summarizeResults(results)} (${Date.now() - startedAt}ms)`,
+  );
+
+  return moderationJson({
+    success: true,
+    model,
+    promptVersion: PROMPT_VERSION,
+    results: results.map((r, i) => ({ id: parsed.ids[i], ...r })),
   });
 }
 
@@ -463,7 +651,27 @@ export default {
     const url = new URL(request.url);
 
     if (url.pathname === "/api/health") {
-      return withSecurityHeaders(json({ status: "ok", model: MODEL }));
+      return withSecurityHeaders(
+        json({
+          status: "ok",
+          model: MODEL,
+          moderation: {
+            enabled: env.MODERATION_ENABLED !== "false",
+            configured: Boolean(env.GEMINI_MODERATION_API_KEY || env.GEMINI_API_KEY),
+            sharedCache: Boolean(env.MODERATION_KV),
+            promptVersion: PROMPT_VERSION,
+            media: env.MODERATION_MEDIA_ENABLED !== "false",
+          },
+        }),
+      );
+    }
+
+    if (url.pathname === "/api/moderate" && request.method === "POST") {
+      return withSecurityHeaders(await handleModerate(request, env));
+    }
+
+    if (url.pathname === "/api/moderate/media" && request.method === "POST") {
+      return withSecurityHeaders(await handleModerateMedia(request, env));
     }
 
     if (url.pathname === "/api/chat" && request.method === "POST") {

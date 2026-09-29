@@ -307,6 +307,55 @@ export const VIOLATION_CATEGORIES = [
         label: "Fraud",
         severityLevel: 2,
       },
+      {
+        id: "property_forgery",
+        labelKey: "violation_property_forgery",
+        label: "Document forgery",
+        severityLevel: 2,
+      },
+    ],
+  },
+  {
+    id: "narcotics",
+    labelKey: "violation_category_narcotics",
+    label: "Narcotics and controlled substances offenses",
+    types: [
+      {
+        id: "narcotics_trafficking",
+        labelKey: "violation_narcotics_trafficking",
+        label: "Trafficking in narcotic drugs or psychotropic substances",
+        severityLevel: 3,
+      },
+      {
+        id: "narcotics_production",
+        labelKey: "violation_narcotics_production",
+        label: "Illicit production, manufacture or cultivation of narcotic drugs or psychotropic substances",
+        severityLevel: 3,
+      },
+      {
+        id: "narcotics_supply_commercial",
+        labelKey: "violation_narcotics_supply_commercial",
+        label: "Conspiracy or attempt to supply a commercial quantity of controlled drugs",
+        severityLevel: 3,
+      },
+      {
+        id: "narcotics_smuggling",
+        labelKey: "violation_narcotics_smuggling",
+        label: "Unlawful importation or exportation (smuggling) of controlled drugs across a border",
+        severityLevel: 3,
+      },
+      {
+        id: "narcotics_distribution",
+        labelKey: "violation_narcotics_distribution",
+        label: "Unlawful sale, supply or distribution of controlled drugs",
+        severityLevel: 2,
+      },
+      {
+        id: "narcotics_possession_intent_supply",
+        labelKey: "violation_narcotics_possession_intent_supply",
+        label: "Possession of controlled drugs with intent to supply",
+        severityLevel: 2,
+      },
     ],
   },
   {

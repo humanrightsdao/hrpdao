@@ -95,6 +95,7 @@ const UserProfilePage = () => {
     toggleFollow,
     loading: followLoading,
     checking: followChecking,
+    error: followError,
   } = useLensFollow(userId);
 
   const {
@@ -102,6 +103,7 @@ const UserProfilePage = () => {
     toggleBlock,
     loading: blockLoading,
     checking: blockChecking,
+    error: blockError,
   } = useLensBlock(userId);
 
   // ДОДАНО: стан community-бану цього профілю (голосування Shield/Council).
@@ -511,6 +513,19 @@ const UserProfilePage = () => {
                           ? t("unblock") || "Unblock"
                           : t("block") || "Block"}
                     </button>
+                  )}
+
+                  {/* ADDED: follow/block are now real transactions (wallet
+                      signature + Lens), so they can genuinely fail —
+                      wallet rejected, Lens refused, network. Previously
+                      the hooks' `error` was never shown. */}
+                  {(followError || blockError) && (
+                    <p
+                      role="alert"
+                      className="w-full text-[13px] text-red-600 dark:text-red-400/80"
+                    >
+                      {followError || blockError}
+                    </p>
                   )}
                 </div>
               )}

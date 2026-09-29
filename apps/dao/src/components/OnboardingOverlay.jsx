@@ -16,8 +16,15 @@ import { useSignMessage } from "@privy-io/react-auth";
 import { LESSON_STRUCTURE, TEST_STRUCTURE, getRandomTestStructureForUser } from "../i18n/structure";
 import LanguageSelector from "./LanguageSelector";
 import CaptchaGate from "./CaptchaGate";
+import { usePolicyLink } from "../hooks/usePolicyLink";
 
-const POLICY_URL =
+// Previously hardcoded to a static IPFS CID, which went stale as soon
+// as governance ratified a newer policy on-chain — new members could
+// end up confirming a version they never actually read. Now read live
+// via usePolicyLink() (same approach as dossier's Navbar.jsx). This is
+// only a fallback for the brief window before that on-chain read
+// resolves, or if it fails.
+const POLICY_FALLBACK_URL =
   "https://ipfs.io/ipfs/QmfZ4Qg1XiR6Y1Lnm4fnykWi6EhpwmkVSzzVNiiQS6YMSF/";
 
 // Server-side, signature-verified onboarding record — NOT localStorage.
@@ -71,6 +78,7 @@ export async function checkOnboardingStatus(addr) {
 
 export default function OnboardingOverlay({ account, onDone, onDisconnect }) {
   const { t } = useTranslation();
+  const policyLink = usePolicyLink();
   const [step, setStep] = useState("welcome");
   const [visitedPolicy, setVisitedPolicy] = useState(false);
   const [agreed, setAgreed] = useState(false);
@@ -175,7 +183,7 @@ export default function OnboardingOverlay({ account, onDone, onDisconnect }) {
               </p>
 
               <a
-                href={POLICY_URL}
+                href={policyLink || POLICY_FALLBACK_URL}
                 target="_blank"
                 rel="noreferrer"
                 onClick={() => setVisitedPolicy(true)}

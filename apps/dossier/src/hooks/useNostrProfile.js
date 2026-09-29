@@ -79,11 +79,9 @@ export function useNostrProfiles(pubkeyHexList) {
 
     let cancelled = false;
     (async () => {
-      console.log("📡 Querying Nostr kind:0 profiles for", missing.length, "pubkey(s)…");
       try {
         const events = await queryNostr({ kinds: [0], authors: missing });
         if (cancelled) return;
-        console.log(`📥 kind:0 query returned ${events.length} event(s) for ${missing.length} requested pubkey(s).`);
 
         // Keep only the newest kind:0 per author (relays can return
         // several historical revisions).
@@ -185,7 +183,6 @@ export function cacheLensProfile(pubkeyHex, { name, picture } = {}) {
       LENS_CACHE_PREFIX + pubkeyHex,
       JSON.stringify({ name: name || null, picture: picture || null }),
     );
-    console.log("💾 Cached Lens profile for peer", pubkeyHex.slice(0, 8) + "…", { name, hasPicture: !!picture });
   } catch {
     // best-effort only — a full localStorage or disabled storage just
     // means we fall back to the kind:0 lookup below, nothing breaks.

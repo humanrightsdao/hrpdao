@@ -369,7 +369,7 @@ export function LensAuthProvider({ children }) {
           await switchChain({ chainId: 232 });
           await new Promise((res) => setTimeout(res, 1000));
         } catch (addError) {
-          console.log("Add chain error:", addError);
+          console.warn("Add chain error:", addError);
         }
       }
     }
@@ -405,7 +405,6 @@ export function LensAuthProvider({ children }) {
   };
 
   const loginWithAccount = async (accountItem) => {
-    console.log("accountItem structure:", JSON.stringify(accountItem, null, 2));
     const client = await getWalletClient();
     if (!client) return { success: false, error: "Wallet not connected" };
 
@@ -435,10 +434,6 @@ export function LensAuthProvider({ children }) {
   };
 
   const loginAsOnboardingUser = async () => {
-    console.log(
-      "🔑 loginAsOnboardingUser called, walletClientRef:",
-      !!walletClientRef.current,
-    );
     // === "One wallet — one Lens account" safeguard ===
     // We check the FRESH list of accounts for this wallet directly from
     // the Lens API, not the accounts state — because this can be reached
@@ -467,11 +462,6 @@ export function LensAuthProvider({ children }) {
         signMessage: signMessageWith(client),
       });
 
-      console.log(
-        "🔑 lensClient.login result isErr:",
-        result.isErr(),
-        result.isErr() ? result.error.message : "OK",
-      );
       if (result.isErr())
         return { success: false, error: result.error.message };
       // An onboarding session by definition doesn't have an account yet.

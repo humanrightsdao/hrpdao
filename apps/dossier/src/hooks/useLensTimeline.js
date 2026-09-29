@@ -192,11 +192,6 @@ export function useLensTimeline(accountAddress, sessionClient) {
     setLoading(true);
     setError(null);
 
-    console.log("🔍 useLensTimeline: запит", {
-      account: accountAddress,
-      hasSession: !!sessionClient,
-    });
-
     // ВИПРАВЛЕНО (двічі): TimelineItem.primary — НЕ завжди пост саме
     // того, на кого ви підписані.
     // 1) Для REPOST: primary — ОРИГІНАЛЬНИЙ пост ОРИГІНАЛЬНОГО автора
@@ -226,10 +221,6 @@ export function useLensTimeline(accountAddress, sessionClient) {
         // або індексація ще не підхопила нові пости/підписки, або
         // timeline враховує лише пости, опубліковані ПІСЛЯ моменту
         // підписки (а не весь історичний бек-кетлог автора).
-        console.log("🔍 useLensTimeline: відповідь", {
-          rawItemsCount: result.value.items.length,
-          rawItems: result.value.items,
-        });
         const mapped = result.value.items
           .map((item) => mapPostToFeedItem(item.primary))
           .filter(Boolean);

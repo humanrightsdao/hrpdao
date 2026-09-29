@@ -15,16 +15,11 @@ const useTheme = () => {
   useLayoutEffect(() => {
     const root = document.documentElement;
 
-    console.log("🎨 Applying theme:", theme);
-    console.log("📍 Current classList:", root.classList.toString());
-
     if (theme === "dark") {
       root.classList.add("dark");
     } else {
       root.classList.remove("dark");
     }
-
-    console.log("✅ New classList:", root.classList.toString());
 
     localStorage.setItem("theme", theme);
   }, [theme]);
@@ -32,7 +27,6 @@ const useTheme = () => {
   const toggleTheme = () => {
     setTheme((prev) => {
       const newTheme = prev === "dark" ? "light" : "dark";
-      console.log("🔄 Toggling theme:", prev, "→", newTheme);
       return newTheme;
     });
   };

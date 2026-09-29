@@ -4,12 +4,21 @@ import { useTranslation } from "react-i18next";
 import { Award, ExternalLink, CheckCircle2, AlertTriangle, Clock } from "lucide-react";
 import { fmtNum, fmtDuration, fmtDateTime, fmtRelative } from "../lib/format";
 import { tDaoMessage } from "../lib/daoMessages";
+import { usePolicyLink } from "../hooks/usePolicyLink";
 
 // The same document as in Documentation (MATERIALS → "Human Rights
 // Policy — full text"). Kept separate here because this page has its
 // own functional context (accepting the policy), not just a link in
 // a list of materials.
-const POLICY_URL = "https://ipfs.io/ipfs/QmfZ4Qg1XiR6Y1Lnm4fnykWi6EhpwmkVSzzVNiiQS6YMSF/";
+//
+// This used to be a hardcoded IPFS CID, which went stale the moment
+// governance ratified a newer policy version on-chain. It's now read
+// live via usePolicyLink() (same on-chain policyURI() read already
+// used by the dossier app's Navbar.jsx), so this page always links to
+// whatever version members are actually being asked to accept below.
+// Kept only as a fallback for the brief window before that read
+// resolves, or if it fails.
+const POLICY_FALLBACK_URL = "https://ipfs.io/ipfs/QmfZ4Qg1XiR6Y1Lnm4fnykWi6EhpwmkVSzzVNiiQS6YMSF/";
 
 // The "Get SHIELD/COUNCIL" buttons used to live on the Business Card
 // page — a logically unrelated action (that page generates a QR
@@ -21,6 +30,7 @@ export default function TokenPage() {
   const dao = useOutletContext();
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState(null);
+  const policyLink = usePolicyLink();
 
   useEffect(() => {
     dao.refreshTokenStatus?.();
@@ -181,7 +191,7 @@ export default function TokenPage() {
           {t("dao.token.policyDescription")}
         </p>
         <a
-          href={POLICY_URL}
+          href={policyLink || POLICY_FALLBACK_URL}
           target="_blank"
           rel="noreferrer"
           className="inline-flex items-center gap-1.5 font-mono text-xs text-verdigris hover:text-verdigrisBright mb-4"

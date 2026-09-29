@@ -330,6 +330,11 @@ const PostCard = ({
   isSharing = false,
   tipButton = null,
   isBlurred = false,
+  // ADDED: optional text for the blur overlay. Without it the original
+  // "flagged by Shield/Senate" message is shown; the AI quarantine passes its
+  // own ("flagged automatically by Atticus AI ...") since no moderator has
+  // looked at the post yet.
+  blurNotice = null,
   onRevealBlurred,
   onReaction,
   onSave,
@@ -652,7 +657,8 @@ const PostCard = ({
             bg-white/80 dark:bg-[#000d1f]/85 backdrop-blur-[2px] rounded-xl px-4 text-center"
         >
           <p className="text-[13px] text-slate-600 dark:text-white/60">
-            ⚠️ This post has been flagged by Shield/Senate as potentially harmful
+            {blurNotice ||
+              "⚠️ This post has been flagged by Shield/Senate as potentially harmful"}
           </p>
           <button
             onClick={(e) => {
@@ -679,7 +685,18 @@ const PostCard = ({
           {/* Header: avatar, name, handle, country, date, menu */}
           <div className="flex items-start justify-between px-4 pt-3.5 pb-0">
             <div className="flex items-center gap-2.5 flex-1 min-w-0">
-              <div className="relative flex-shrink-0">
+              {/* Avatar — click opens the author's public profile
+                  (same handler as the author name below) */}
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onAuthorClick?.();
+                }}
+                aria-label={post.author?.name || t("anonymous") || "Anonymous"}
+                title={post.author?.name || t("anonymous") || "Anonymous"}
+                className="relative flex-shrink-0 p-0 bg-transparent border-0 cursor-pointer hover:opacity-85 transition-opacity"
+              >
                 <div
                   className="relative w-[40px] h-[44px] p-[1.5px] clip-path-hexagon
                   bg-gradient-to-br from-[#e8a0b0] to-[#2B000A]"
@@ -709,7 +726,7 @@ const PostCard = ({
                     </div>
                   </div>
                 </div>
-              </div>
+              </button>
 
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-1.5 flex-wrap">

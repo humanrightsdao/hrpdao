@@ -214,6 +214,11 @@ const HelpRequestPage = () => {
     reactToComment,
     isCommentOwner,
     createLensComment,
+    hiddenComments,
+    loadingHidden,
+    hideComment,
+    unhideComment,
+    loadHiddenComments,
   } = useLensComments(
     request?.lens_post_id,
     sessionClient,
@@ -228,12 +233,25 @@ const HelpRequestPage = () => {
   // just CLOSES OVER that variable and is called later (on user click),
   // so by call time the variable is already guaranteed to be initialized.
   const postCommentWithLimit = async (text, mediaFiles) => {
-    const rateCheck = await checkPostRateLimit(myAccountAddress, text, { isRestricted: dao.isRestricted });
+    const rateCheck = await checkPostRateLimit(myAccountAddress, text, {
+      isRestricted: dao.isRestricted,
+      kind: "comment",
+      context: request?.description || "",
+    });
     if (!rateCheck.allowed) {
       alert(rateCheck.reason);
       return;
     }
-    return postComment(text, mediaFiles);
+    // ADDED: surface a failure that happens AFTER the text gate — most
+    // importantly a blocked/unavailable media check (assertMediaPublishAllowed
+    // inside createLensComment), which previously had no visible feedback at
+    // all (the promise's rejection was only ever caught inside the hook,
+    // which just returns {success:false} — nobody displayed it).
+    const result = await postComment(text, mediaFiles);
+    if (result && result.success === false) {
+      alert(result.error);
+    }
+    return result;
   };
 
   const [modState, setModState] = useState({
@@ -977,6 +995,15 @@ const HelpRequestPage = () => {
               isCommentOwner={isCommentOwner}
               getCountryDisplayName={getCountryDisplayName}
               formatDate={formatDate}
+              // ADDED: only the request's author can hide/restore comments
+              // ADDED: the request's text — context for the AI display-time scan
+              moderationContext={request?.description || ""}
+              canModerateComments={isOwner}
+              onHideComment={hideComment}
+              onUnhideComment={unhideComment}
+              onLoadHiddenComments={loadHiddenComments}
+              hiddenComments={hiddenComments}
+              loadingHidden={loadingHidden}
             />
           </div>
         </div>

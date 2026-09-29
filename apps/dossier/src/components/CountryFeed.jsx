@@ -1,5 +1,5 @@
 // src/components/CountryFeed.jsx
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
 import { Globe } from "lucide-react";
@@ -27,6 +27,9 @@ import { fetchAllReportComments } from "../utils/postReports";
 // author's actual history directly from Lens, not localStorage (see the
 // comment in that file itself for the reasons).
 import { checkPostRateLimit } from "../utils/postRateLimit";
+// ADDED: display-time AI moderation ("Atticus Guard") — see AI_MODERATION.md.
+import { useAIVerdicts } from "../hooks/useAIVerdicts";
+import { primaryCategoryLabel } from "../utils/aiModeration";
 
 // CHANGED: the post card is now the shared <PostCard/> (src/components/
 // PostCard.jsx), the same one used by FollowingPage.jsx. All of the
@@ -153,6 +156,21 @@ const CountryFeed = ({
   // Posts the user has chosen to reveal despite the blur - only within
   // this browser session, ephemeral, doesn't affect what others see.
   const [revealedBlurred, setRevealedBlurred] = useState(new Set());
+  // ADDED: AI verdicts for the posts on screen. A "flag"/"block" verdict is
+  // fed into computeModerationState() below, which blurs the post just like
+  // the report-velocity auto-quarantine (revealable, overridable by an
+  // explicit moderator UNBLUR). Posts with no verdict yet — still loading,
+  // service down, too short — render normally (fail open).
+  const aiItems = useMemo(
+    () =>
+      posts.map((p) => ({
+        id: p.lens_post_id || p.id,
+        kind: "post",
+        text: p.content || "",
+      })),
+    [posts],
+  );
+  const aiVerdicts = useAIVerdicts(aiItems);
   // ADDED: while modActions/shieldTotalSupply hasn't loaded yet, the
   // feed's first render happened WITHOUT the ban filter — a banned
   // author briefly appeared, then disappeared once the data finished
@@ -610,7 +628,11 @@ const CountryFeed = ({
       connectedAddress ||
       lensWalletAddress ||
       null;
-    const rateCheck = await checkPostRateLimit(myAddressForLimit, content, { isRestricted: dao.isRestricted });
+    const rateCheck = await checkPostRateLimit(myAddressForLimit, content, {
+      isRestricted: dao.isRestricted,
+      kind: "comment",
+      context: post.content || "",
+    });
     if (!rateCheck.allowed) {
       alert(rateCheck.reason);
       return;
@@ -819,7 +841,7 @@ const CountryFeed = ({
           const modState = computeModerationState(
             modActions,
             post.lens_post_id,
-            { reports },
+            { reports, aiVerdict: aiVerdicts.get(post.lens_post_id || post.id) },
           );
 
           // ADDED: posts by authors whose account has been banned by
@@ -887,6 +909,15 @@ const CountryFeed = ({
                 ) : null
               }
               isBlurred={isBlurred}
+              blurNotice={
+                modState.aiQuarantined
+                  ? t("ai_moderation_post_flagged", {
+                      category: primaryCategoryLabel(modState.aiVerdict),
+                      defaultValue:
+                        "⚠️ Atticus AI flagged this post automatically (reason: {{category}}). It is awaiting human review.",
+                    })
+                  : null
+              }
               onRevealBlurred={() =>
                 setRevealedBlurred((prev) => new Set(prev).add(post.id))
               }

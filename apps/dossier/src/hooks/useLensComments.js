@@ -58,6 +58,93 @@ const extractCountryFromMeta = (metadata) => {
   return attr?.value || null;
 };
 
+// ── Shared normalization ────────────────────────────────────────────────────
+// ADDED: moved out of loadComments() so the same mapping is used for both
+// visible comments and the hidden ones (loadHiddenComments()).
+
+// ADDED: the address of THIS app — same env var the login flow uses
+// (LensAuthContext.jsx) and the user counter (useUserStats.js).
+const OUR_APP_ADDRESS = (import.meta.env.VITE_LENS_APP_ADDRESS || "")
+  .toString()
+  .toLowerCase();
+
+// ADDED: true when the comment was posted through a different Lens app.
+// Primary signal: Post.app.address (set by Lens from the authenticated
+// session's app, so it can't be faked in metadata). Fallback when Lens
+// returns no app: the metadata attribute app="hrpdao" that
+// createLensComment() writes for comments made in this app.
+const isFromExternalApp = (c) => {
+  if (!OUR_APP_ADDRESS) return false; // can't tell — don't label anything
+  const address = c.app?.address?.toLowerCase();
+  if (address) return address !== OUR_APP_ADDRESS;
+  const appAttr = c.metadata?.attributes?.find((a) => a.key === "app")?.value;
+  return appAttr !== "hrpdao";
+};
+
+const normalizeComment = (c) => ({
+  id: c.id,
+  lens_comment_id: c.id,
+  content: c.metadata?.content || "",
+  // ДОДАНО: медіафайли, прикріплені до коментаря — коментар у Lens
+  // v3 це теж Post, тож ту саму структуру метаданих (ImageMetadata/
+  // VideoMetadata/attachments), яку CountryFeed.jsx вже вміє
+  // показувати для постів, парсимо тим самим extractMediaUrls()
+  // з useLensPosts.js.
+  media_urls: extractMediaUrls(c.metadata).map((m) => m.url),
+  media_types: extractMediaUrls(c.metadata).map((m) => m.type),
+  created_at: c.timestamp,
+  updated_at: c.timestamp,
+  // ADDED: which Lens app the comment was posted through. Lens is an
+  // open protocol — anyone can comment from ANY Lens client, not only
+  // from this app — so CommentsSection uses is_external_app to mark
+  // such comments (see isFromExternalApp above).
+  app_address: c.app?.address || null,
+  is_external_app: isFromExternalApp(c),
+  author: {
+    id: c.author?.address,
+    name: c.author?.metadata?.name || null,
+    unique_name:
+      c.author?.username?.localName || c.author?.address?.slice(0, 8),
+    avatar_url: resolveAuthorPicture(c.author?.metadata?.picture),
+    country: extractCountryFromMeta(c.metadata),
+    wallet_address: c.author?.address,
+    // ФІКС: раніше тут не було owner взагалі — тому "authorCandidates"
+    // для скарги на коментар (ReportModal.jsx) фактично містив ОДНУ
+    // адресу двічі (Lens Account-смартконтракт), а не справжню EOA-
+    // адресу, якою реально мінтили Shield/Senate SBT (той самий
+    // owner_address, що вже є в normalizeLensPost() useLensPosts.js).
+    // Це й спричиняло хибне "не Shield/Senate" для коментарів.
+    owner_address: c.author?.owner || null,
+  },
+  // ФІКС: sanitizeCount() захищає від пошкоджених значень з Lens
+  // API/індексатора (той самий баг, що й для постів — див.
+  // utils/sanitizeCount.js).
+  truth_count: sanitizeCount(c.stats?.upvotes),
+  false_count: sanitizeCount(c.stats?.downvotes),
+  // FIXED: same bug/fix as normalizeLensPost (useLensPosts.js) —
+  // my_reaction now comes from Lens's own real
+  // operations.hasUpvoted/hasDownvoted instead of localStorage,
+  // which could drift from what's actually on the Lens backend and
+  // trigger the "Правда duplicates onto Неправда" bug via the
+  // defensive-cleanup undoReaction() call below.
+  my_reaction: c.operations?.hasUpvoted
+    ? "truth"
+    : c.operations?.hasDownvoted
+      ? "false"
+      : null,
+});
+
+// Filters out report / moderation-log comments, normalizes, newest first.
+const mapVisibleComments = (items) =>
+  items
+    .filter(
+      (c) =>
+        !isReportComment(c.metadata?.content) &&
+        !isModActionComment(c.metadata?.content),
+    )
+    .map(normalizeComment)
+    .sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+
 export default function useLensComments(
   lensPostId,
   sessionClient,
@@ -85,7 +172,12 @@ export default function useLensComments(
   } = useLensPosts(sessionClient, getWalletClient);
 
   const [comments, setComments] = useState([]);
+  // ADDED: comments the post's author has hidden (Lens hideReply). Lens
+  // omits them from the default (VISIBLE) query, so they're loaded on
+  // demand via loadHiddenComments() — only the post's author needs them.
+  const [hiddenComments, setHiddenComments] = useState([]);
   const [loadingComments, setLoadingComments] = useState(false);
+  const [loadingHidden, setLoadingHidden] = useState(false);
   const [postingComment, setPostingComment] = useState(false);
 
   // ── Load comments from Lens (= пости з commentOn) ─────────────────────────
@@ -118,64 +210,9 @@ export default function useLensComments(
       const { items } = result.value;
 
       // ФІКС: коментарі-скарги (REPORT_TAG) і коментарі-лог дій модерації
-      // (MOD_ACTION_TAG) навмисно приховані з треду — інакше показуються
-      // користувачам як "звичайний" коментар з сирим JSON.
-      const visibleItems = items.filter(
-        (c) =>
-          !isReportComment(c.metadata?.content) &&
-          !isModActionComment(c.metadata?.content),
-      );
-
-      const normalized = visibleItems.map((c) => ({
-        id: c.id,
-        lens_comment_id: c.id,
-        content: c.metadata?.content || "",
-        // ДОДАНО: медіафайли, прикріплені до коментаря — коментар у Lens
-        // v3 це теж Post, тож ту саму структуру метаданих (ImageMetadata/
-        // VideoMetadata/attachments), яку CountryFeed.jsx вже вміє
-        // показувати для постів, парсимо тим самим extractMediaUrls()
-        // з useLensPosts.js.
-        media_urls: extractMediaUrls(c.metadata).map((m) => m.url),
-        media_types: extractMediaUrls(c.metadata).map((m) => m.type),
-        created_at: c.timestamp,
-        updated_at: c.timestamp,
-        author: {
-          id: c.author?.address,
-          name: c.author?.metadata?.name || null,
-          unique_name:
-            c.author?.username?.localName || c.author?.address?.slice(0, 8),
-          avatar_url: resolveAuthorPicture(c.author?.metadata?.picture),
-          country: extractCountryFromMeta(c.metadata),
-          wallet_address: c.author?.address,
-          // ФІКС: раніше тут не було owner взагалі — тому "authorCandidates"
-          // для скарги на коментар (ReportModal.jsx) фактично містив ОДНУ
-          // адресу двічі (Lens Account-смартконтракт), а не справжню EOA-
-          // адресу, якою реально мінтили Shield/Senate SBT (той самий
-          // owner_address, що вже є в normalizeLensPost() useLensPosts.js).
-          // Це й спричиняло хибне "не Shield/Senate" для коментарів.
-          owner_address: c.author?.owner || null,
-        },
-        // ФІКС: sanitizeCount() захищає від пошкоджених значень з Lens
-        // API/індексатора (той самий баг, що й для постів — див.
-        // utils/sanitizeCount.js).
-        truth_count: sanitizeCount(c.stats?.upvotes),
-        false_count: sanitizeCount(c.stats?.downvotes),
-        // FIXED: same bug/fix as normalizeLensPost (useLensPosts.js) —
-        // my_reaction now comes from Lens's own real
-        // operations.hasUpvoted/hasDownvoted instead of localStorage,
-        // which could drift from what's actually on the Lens backend and
-        // trigger the "Правда duplicates onto Неправда" bug via the
-        // defensive-cleanup undoReaction() call below.
-        my_reaction: c.operations?.hasUpvoted
-          ? "truth"
-          : c.operations?.hasDownvoted
-            ? "false"
-            : null,
-      }));
-
-      normalized.sort(
-        (a, b) => new Date(b.created_at) - new Date(a.created_at),
-      );
+      // (MOD_ACTION_TAG) навмисно приховані з треду — фільтрація й
+      // нормалізація тепер у mapVisibleComments() вище.
+      const normalized = mapVisibleComments(items);
       setComments(normalized);
     } catch (err) {
       console.warn("⚠️ Could not load Lens comments:", err.message);
@@ -374,8 +411,103 @@ export default function useLensComments(
     ],
   );
 
+  // ── Hide / unhide (post author only) ──────────────────────────────────────
+  // ADDED: Lens hideReply/unhideReply. Off-chain calls made with the
+  // session client (no transaction, no gas). Lens only accepts them from
+  // the author of the post that was replied to — the pages decide
+  // whether to show the control (canModerateComments), and Lens rejects
+  // anyone else server-side, so the error is passed back to the UI.
+  const hideComment = useCallback(
+    async (commentId) => {
+      const comment = comments.find((c) => c.id === commentId);
+      if (!comment?.lens_comment_id) return { success: false };
+      if (!sessionClient) return { success: false, error: "not_logged_in" };
+      try {
+        const { hideReply } = await import("@lens-protocol/client/actions");
+        const { postId: mkPostId } = await import("@lens-protocol/client");
+        const result = await hideReply(sessionClient, {
+          post: mkPostId(comment.lens_comment_id),
+        });
+        if (result.isErr()) throw new Error(result.error.message);
+        setComments((prev) => prev.filter((c) => c.id !== commentId));
+        setHiddenComments((prev) =>
+          prev.some((c) => c.id === commentId) ? prev : [comment, ...prev],
+        );
+        return { success: true };
+      } catch (err) {
+        console.error("❌ Error hiding comment:", err);
+        return { success: false, error: err.message };
+      }
+    },
+    [comments, sessionClient],
+  );
+
+  const unhideComment = useCallback(
+    async (commentId) => {
+      const comment = hiddenComments.find((c) => c.id === commentId);
+      if (!comment?.lens_comment_id) return { success: false };
+      if (!sessionClient) return { success: false, error: "not_logged_in" };
+      try {
+        const { unhideReply } = await import("@lens-protocol/client/actions");
+        const { postId: mkPostId } = await import("@lens-protocol/client");
+        const result = await unhideReply(sessionClient, {
+          post: mkPostId(comment.lens_comment_id),
+        });
+        if (result.isErr()) throw new Error(result.error.message);
+        setHiddenComments((prev) => prev.filter((c) => c.id !== commentId));
+        setComments((prev) =>
+          [comment, ...prev.filter((c) => c.id !== commentId)].sort(
+            (a, b) => new Date(b.created_at) - new Date(a.created_at),
+          ),
+        );
+        return { success: true };
+      } catch (err) {
+        console.error("❌ Error restoring comment:", err);
+        return { success: false, error: err.message };
+      }
+    },
+    [hiddenComments, sessionClient],
+  );
+
+  // Loads the hidden comments (replaces the list wholesale, so it also
+  // reconciles anything hidden earlier in this session).
+  const loadHiddenComments = useCallback(async () => {
+    if (!lensPostId || !sessionClient) return;
+    setLoadingHidden(true);
+    try {
+      const { fetchPostReferences } = await import(
+        "@lens-protocol/client/actions"
+      );
+      const {
+        postId: mkPostId,
+        PostReferenceType,
+        PostVisibilityFilter,
+      } = await import("@lens-protocol/client");
+
+      const result = await fetchPostReferences(sessionClient, {
+        referencedPost: mkPostId(lensPostId),
+        referenceTypes: [PostReferenceType.CommentOn],
+        visibilityFilter: PostVisibilityFilter.Hidden,
+      });
+      if (result.isErr()) {
+        console.warn("⚠️ Error loading hidden comments:", result.error.message);
+        return;
+      }
+      setHiddenComments(mapVisibleComments(result.value.items));
+    } catch (err) {
+      console.warn("⚠️ Could not load hidden comments:", err.message);
+    } finally {
+      setLoadingHidden(false);
+    }
+  }, [lensPostId, sessionClient]);
+
   return {
     comments,
+    hiddenComments,
+    loadingHidden,
+    hideComment,
+    unhideComment,
+    loadHiddenComments,
     loadingComments,
     postingComment,
     loadComments,

@@ -20,6 +20,8 @@ import { useLensAuth } from "../context/LensAuthContext";
 import { useNostrIdentity } from "./useNostrIdentity";
 import { useNostrRelay } from "./useNostrRelay";
 import { buildImetaTags } from "../lib/nostrRelay";
+import { assertPublishAllowed } from "../utils/aiModeration";
+import { assertMediaPublishAllowed } from "../utils/aiMediaModeration";
 
 // ─── Константи ────────────────────────────────────────────────────────────────
 
@@ -253,6 +255,11 @@ export function useLensHelpRequests() {
     async ({ description, helpTypes = [], countryCode, mediaFiles = [] }) => {
       setError("");
       try {
+        // ADDED: last line of defence — see utils/aiModeration.js.
+        await assertPublishAllowed({ text: description, kind: "help_request" });
+        if (mediaFiles.length > 0) {
+          await assertMediaPublishAllowed(mediaFiles, { kind: "help_request" });
+        }
         const session = requireSession();
         const client = await getWalletClient();
         const txWalletClient = await getViemWalletClient(client);

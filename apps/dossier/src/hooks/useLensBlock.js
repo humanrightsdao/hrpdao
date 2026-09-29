@@ -1,6 +1,11 @@
 // src/hooks/useLensBlock.js
 import { useState, useEffect, useCallback } from "react";
 import { lensClient } from "../lib/lens";
+// ADDED: blockAccount/unblockAccount only return an operation — it still
+// has to be signed and sent (see lib/lensTransaction.js). The wallet
+// comes from the auth context, like the callers of useLensPosts.
+import { useLensAuth } from "../context/LensAuthContext";
+import { sendLensOperation } from "../lib/lensTransaction";
 import {
   fetchAccountsBlocked,
   blockAccount,
@@ -27,6 +32,7 @@ async function getSessionClient() {
 }
 
 export function useLensBlock(targetAddress) {
+  const { getWalletClient } = useLensAuth();
   const [isBlocked, setIsBlocked] = useState(false);
   const [loading, setLoading] = useState(false);
   const [checking, setChecking] = useState(true);
@@ -108,28 +114,28 @@ export function useLensBlock(targetAddress) {
       // ВИПРАВЛЕНО: request приймає одну адресу `account`, а не масив
       // `accounts` — раніше це теж було невірно (BlockRequest /
       // UnblockRequest у @lens-protocol/graphql — { account: EvmAddress }).
+      // FIXED: blockAccount()/unblockAccount() only build an "operation"
+      // (SponsoredTransactionRequest / SelfFundedTransactionRequest /
+      // TransactionWillFail). It used to be discarded — the button just
+      // flipped, and reloading the page showed the account as NOT
+      // blocked, because nothing had ever been sent to Lens.
+      // sendLensOperation() now signs and sends it the same way
+      // useLensPosts does for posts (handleOperationWith(walletClient)
+      // -> txHash -> wait for indexing). The state flips only after the
+      // transaction was really sent; failures (wallet rejected, Lens
+      // refused, TransactionWillFail ...) are shown via `error`.
       const action = isBlocked ? unblockAccount : blockAccount;
-      const result = await action(sessionClient, { account: targetAddress });
-
-      if (result.isErr()) {
-        console.error("❌ Lens block/unblock error:", result.error.message);
-        setError(result.error.message);
-        return;
+      const { indexed } = await sendLensOperation({
+        sessionClient,
+        getWalletClient,
+        action: () => action(sessionClient, { account: targetAddress }),
+      });
+      if (!indexed) {
+        console.warn(
+          "⚠️ useLensBlock: транзакцію відправлено, але Lens ще не проіндексував її — статус може оновитись із затримкою",
+        );
       }
 
-      // ВАЖЛИВО: result.value тут — це ще не підтверджена транзакція, а
-      // одна з кількох можливих "operation" відповідей Lens SDK
-      // (SponsoredTransactionRequest / SelfFundedTransactionRequest /
-      // TransactionWillFail). У повноцінному флоу її ще треба
-      // прокинути через handleOperationWith(walletClient) із
-      // "@lens-protocol/client/viem" (чи аналог для ethers/іншого
-      // підписувача), щоб реально підписати й дочекатись виконання —
-      // так само, як це зроблено в офіційних прикладах banGroupAccounts.
-      // Тут це свідомо лишено як TODO, бо в проєкті ще не видно файлу
-      // з налаштуванням гаманця/signer (той самий, яким підписувались
-      // повідомлення при onboarding) — без нього не можна точно
-      // підставити правильний walletClient. Як тимчасовий компроміс
-      // стан оновлюється оптимістично одразу після успішного виклику.
       setIsBlocked((prev) => !prev);
     } catch (e) {
       console.error("❌ useLensBlock toggleBlock exception:", e);
@@ -137,7 +143,7 @@ export function useLensBlock(targetAddress) {
     } finally {
       setLoading(false);
     }
-  }, [targetAddress, isBlocked]);
+  }, [targetAddress, isBlocked, getWalletClient]);
 
   return { isBlocked, toggleBlock, loading, checking, error };
 }
