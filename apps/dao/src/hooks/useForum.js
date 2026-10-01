@@ -3,6 +3,12 @@ import { pool, RELAYS, publishEvent } from "../lib/nostrLookup";
 import { useNostrIdentity } from "./useNostrIdentity";
 import { checkForumRateLimit } from "../lib/forumRateLimit";
 import { fetchAllForumModActions, computeBanState } from "../lib/forumModeration";
+// ADDED: last line of defence — nothing is published without an AI verdict
+// (see lib/aiModeration.js -> assertPublishAllowed). checkForumRateLimit()
+// above already runs the same check; this only guards against a future
+// screen or refactor forgetting the UI gate.
+import { assertPublishAllowed, threadModerationText } from "../lib/aiModeration";
+import { FORUM_TAG, FORUM_REPORT_TAG } from "../lib/forumTags";
 
 // ── Tag schema ────────────────────────────────────────────
 // Thread:  kind:1, tags: [["t","hrp-forum"], ["t","hrp-forum-<cat>"], ["subject", title], ["address", wallet]]
@@ -32,7 +38,10 @@ import { fetchAllForumModActions, computeBanState } from "../lib/forumModeration
 // reliably support deletion, so a fresh tag is the practical way to
 // stop querying them. They still physically exist on the relays under
 // "hrp-forum" — this only changes what THIS app queries/publishes.
-export const FORUM_TAG = "hrpdao-forum";
+//
+// The constant itself lives in lib/forumTags.js (a leaf module) — see there for
+// why it must not be defined in this file. Re-exported for existing importers.
+export { FORUM_TAG, FORUM_REPORT_TAG };
 
 function parseThread(ev) {
   const subjectTag = ev.tags.find((t) => t[0] === "subject");
@@ -70,7 +79,7 @@ function parseReply(ev) {
 // for the tag (interoperability), while the exact category the person
 // actually picked is kept, verbatim, in the event's own `content` as
 // JSON (for our own moderation queue to read precisely).
-export const FORUM_REPORT_TAG = `${FORUM_TAG}-report`;
+// (FORUM_REPORT_TAG: see lib/forumTags.js)
 
 export const FORUM_REPORT_CATEGORIES = [
   { value: "hate_speech", nip56: "other" },
@@ -180,8 +189,11 @@ export function useForum(dao) {
       // Checked AFTER the membership/ban gates (cheap, no network) but
       // BEFORE actually building/signing the event (a wasted signature
       // prompt for a post that's about to be rejected is bad UX).
-      const rl = await checkForumRateLimit(pubkey, body);
+      // The AI judges the TITLE together with the body (threadModerationText).
+      const moderationText = threadModerationText(title, body);
+      const rl = await checkForumRateLimit(pubkey, body, "forum_thread", { moderationText });
       if (!rl.allowed) return { success: false, error: rl.reason };
+      await assertPublishAllowed({ text: moderationText, kind: "forum_thread" });
       const unsigned = {
         kind: 1,
         pubkey,
@@ -204,15 +216,18 @@ export function useForum(dao) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dao, getSignerPubkey, signEvent, address]);
 
-  const postReply = useCallback(async (threadId, body) => {
+  // `context` = the parent thread's title+body (truncated by the caller): the
+  // AI uses it to tell a bot-like/off-topic reply from a genuine one.
+  const postReply = useCallback(async (threadId, body, context = "") => {
     const elig = checkForumEligibility();
     if (!elig.eligible) return { success: false, error: elig.reason };
     const ban = await checkNotBanned();
     if (ban.banned) return { success: false, error: "Forum posting is suspended — the community voted to ban this account." };
     try {
       const pubkey = await getSignerPubkey();
-      const rl = await checkForumRateLimit(pubkey, body);
+      const rl = await checkForumRateLimit(pubkey, body, "forum_reply", { context });
       if (!rl.allowed) return { success: false, error: rl.reason };
+      await assertPublishAllowed({ text: body, kind: "forum_reply", context });
       const unsigned = {
         kind: 1,
         pubkey,

@@ -19,6 +19,14 @@ export default function HomePage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dao.account]);
 
+  // Total DAO participants — public data, readable without a wallet.
+  // Re-read when the account changes or when this user mints Shield
+  // (hasShield flips), so the count reflects their own join right away.
+  useEffect(() => {
+    dao.loadMemberCount();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dao.account, dao.hasShield]);
+
   const activeCount = dao.proposals.filter((p) => p.stateName === "Active").length;
 
   return (
@@ -59,6 +67,10 @@ export default function HomePage() {
           </div>
 
           <div className="mt-10 flex flex-wrap gap-x-10 gap-y-5">
+            <Stat
+              label={t("dao.home.members")}
+              value={fmtNum(dao.memberCount)}
+            />
             <Stat label={t("dao.home.activeCases")} value={activeCount} />
             <Stat
               label={t("dao.home.quorum")}

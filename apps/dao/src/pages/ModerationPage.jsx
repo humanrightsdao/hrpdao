@@ -1,9 +1,10 @@
 import { useEffect, useState } from "react";
 import { useOutletContext, useSearchParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
-import { ShieldAlert, Flag, Loader2, ExternalLink, Ban } from "lucide-react";
+import { ShieldAlert, Flag, Loader2, ExternalLink, Ban, Sparkles } from "lucide-react";
 import { tDaoMessage } from "../lib/daoMessages";
 import SanctionProposalCard from "../components/SanctionProposalCard";
+import AIModerationPanel from "../components/AIModerationPanel";
 import { pool, RELAYS } from "../lib/nostrLookup";
 import { useNostrIdentity } from "../hooks/useNostrIdentity";
 import { truncAddr, fmtRelative } from "../lib/format";
@@ -42,7 +43,9 @@ export default function ModerationPage() {
   // queue (app-level blur/hide/ban-vote — see forumModeration.js). The
   // "Escalate to Sanction" action below moves a case from the second
   // into the first.
-  const [tab, setTab] = useState(searchParams.get("tab") === "forum" ? "forum" : "sanctions");
+  const [tab, setTab] = useState(
+    ["forum", "ai"].includes(searchParams.get("tab")) ? searchParams.get("tab") : "sanctions",
+  );
 
   const [showForm, setShowForm] = useState(false);
   const [targetAddress, setTargetAddress] = useState("");
@@ -173,6 +176,7 @@ export default function ModerationPage() {
         {[
           { id: "sanctions", label: t("dao.moderation.tabSanctions"), icon: ShieldAlert },
           { id: "forum", label: t("dao.moderation.tabForumReports"), icon: Flag },
+          { id: "ai", label: t("dao.moderation.tabAi", { defaultValue: "AI Moderation" }), icon: Sparkles },
         ].map(({ id, label, icon: Icon }) => (
           <button
             key={id}
@@ -180,7 +184,7 @@ export default function ModerationPage() {
               setTab(id);
               setSearchParams((p) => {
                 const next = new URLSearchParams(p);
-                if (id === "forum") next.set("tab", "forum");
+                if (id === "forum" || id === "ai") next.set("tab", id);
                 else next.delete("tab");
                 return next;
               });
@@ -197,7 +201,9 @@ export default function ModerationPage() {
         ))}
       </div>
 
-      {tab === "sanctions" ? (
+      {tab === "ai" ? (
+        <AIModerationPanel />
+      ) : tab === "sanctions" ? (
         <SanctionsTab
           t={t}
           dao={dao}

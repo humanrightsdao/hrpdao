@@ -17,7 +17,9 @@
 // Nostr SDK, bypassing this UI, isn't caught by this check.
 
 import { pool, RELAYS } from "./nostrLookup";
-import { FORUM_TAG } from "../hooks/useForum";
+// ADDED: third safeguard — AI content moderation (see aiModeration.js).
+import { checkBeforePublish } from "./aiModeration";
+import { FORUM_TAG } from "./forumTags";
 
 // Windows are checked in order from shortest — the first violated window
 // immediately returns the rejection reason.
@@ -79,7 +81,7 @@ function findDuplicateContent(recentEntries, newContent) {
  * @param {string|null} content - text of the publication being submitted.
  *   If omitted, only the rate limit is checked.
  */
-export async function checkForumRateLimit(pubkey, content = null) {
+async function checkRateLimitAndDuplicates(pubkey, content = null) {
   if (!pubkey) return { allowed: true };
 
   const widestWindowMs = Math.max(...POST_RATE_LIMITS.map((l) => l.windowMs));
@@ -132,6 +134,51 @@ export async function checkForumRateLimit(pubkey, content = null) {
   }
 
   return { allowed: true };
+}
+
+/**
+ * THE gate every forum publication goes through (thread or reply) — the same
+ * call sites that always used it, now with a third safeguard, in order
+ * (cheapest first):
+ *
+ *   1. posting rate limit + duplicate-text protection    (one relay read)
+ *   2. AI content moderation, "Atticus Guard"             (one small request)
+ *
+ * The AI step only refuses CLEAR violations (scams/phishing, hate, threats,
+ * doxxing, sexual content, child-safety ...) — verdict "block". Borderline
+ * content ("flag") is published (there is currently no blur UI for forum
+ * posts). If the AI service is down, publishing proceeds by default
+ * (fail-open — see aiModeration.js's header note); it can never stop a
+ * legitimate post just because a third-party AI service had an outage.
+ *
+ * @param {string|null} pubkey
+ * @param {string|null} content
+ * @param {"forum_thread"|"forum_reply"} [kind]
+ * @param {{ moderationText?: string, context?: string }} [options]
+ *   moderationText – text sent to the AI (thread: title + body); context – for
+ *   a reply, the text of the thread it answers.
+ * @returns {Promise<{allowed:true, moderation?:object} |
+ *                   {allowed:false, reason:string, isModeration?:true, moderation?:object, ...}>}
+ */
+export async function checkForumRateLimit(
+  pubkey,
+  content = null,
+  kind = "forum_thread",
+  { moderationText = content, context = "" } = {},
+) {
+  const base = await checkRateLimitAndDuplicates(pubkey, content);
+  if (!base.allowed) return base;
+
+  if (!content) return base;
+
+  // `moderationText` is what the AI judges: for a new thread that is title +
+  // body (threadModerationText()), otherwise just the content. The duplicate
+  // check above deliberately keeps using the body alone.
+  const guard = await checkBeforePublish({ text: moderationText, kind, context });
+  if (!guard.allowed) {
+    return { allowed: false, isModeration: true, reason: guard.reason, moderation: guard.result };
+  }
+  return guard.result ? { ...base, moderation: guard.result } : base;
 }
 
 /** UI helper: formats retryAfterMs into human-readable text ("42s" / "3 min"). */

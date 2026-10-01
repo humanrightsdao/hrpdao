@@ -1,13 +1,14 @@
 import { useEffect, useState } from "react";
 import { useParams, Link, useOutletContext } from "react-router-dom";
 import { useTranslation } from "react-i18next";
-import { Loader2, Send, Flag, EyeOff, AlertTriangle, Eye } from "lucide-react";
+import { Loader2, Send, Flag, EyeOff, AlertTriangle, Eye, Sparkles } from "lucide-react";
 import { useForum } from "../hooks/useForum";
 import ForumAuthor from "../components/ForumAuthor";
 import ReportForumModal from "../components/ReportForumModal";
 import SignerBadge, { useForumSigner } from "../components/SignerBadge";
 import { fmtRelative } from "../lib/format";
 import { tDaoMessage } from "../lib/daoMessages";
+import { fetchVerdicts, isFlagged, primaryCategoryLabel, threadModerationText } from "../lib/aiModeration";
 import { fetchAllForumModActions, computeModerationState, computeBanState } from "../lib/forumModeration";
 
 // A moderator-blurred post/reply: collapsed behind a warning until the
@@ -15,17 +16,20 @@ import { fetchAllForumModActions, computeModerationState, computeBanState } from
 // forumModeration.js's own notes on what "hidden"/"blurred" can and
 // can't guarantee on public Nostr relays) — just a considerate default
 // for content a Shield/Council moderator flagged as sensitive.
-function BlurredBody({ children }) {
+//
+// Also used for items the AUTOMATIC AI check ("Atticus AI") flagged: same
+// "click to reveal" behaviour, a different label. The AI never deletes or
+// hides anything for good — a flagged item is one click away.
+function BlurredBody({ label, icon: Icon = AlertTriangle, revealed, onReveal, children }) {
   const { t } = useTranslation();
-  const [revealed, setRevealed] = useState(false);
   if (revealed) return children;
   return (
     <button
-      onClick={() => setRevealed(true)}
+      onClick={onReveal}
       className="w-full text-left rounded-lg border border-dashed border-gold/50 bg-gold/5 px-4 py-3 font-mono text-xs text-gold flex items-center gap-2 hover:bg-gold/10 transition-colors"
     >
-      <AlertTriangle size={13} className="shrink-0" />
-      {t("dao.forumModeration.stateBlurred")} — {t("dao.forumThread.clickToReveal")}
+      <Icon size={13} className="shrink-0" />
+      {label} — {t("dao.forumThread.clickToReveal")}
       <Eye size={13} className="ml-auto shrink-0" />
     </button>
   );
@@ -42,6 +46,10 @@ export default function ForumThreadPage() {
   const [error, setError] = useState(null);
   const [reportTarget, setReportTarget] = useState(null); // { eventId, pubkey } | null
   const [modActions, setModActions] = useState([]);
+  // AI verdicts (id → result) for the thread + its replies, and which blurred
+  // items the reader has clicked open.
+  const [aiVerdicts, setAiVerdicts] = useState(() => new Map());
+  const [revealedIds, setRevealedIds] = useState(() => new Set());
   const signerInfo = useForumSigner();
   const elig = forum.canPost();
 
@@ -56,12 +64,39 @@ export default function ForumThreadPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 
+  // Ask the moderation service about what is on screen. Fail-open: no verdict
+  // (service down, circuit open) simply means nothing is blurred. The texts
+  // and context are built exactly like at publish time, so this is normally
+  // answered from the cache the publish-time check already warmed.
+  useEffect(() => {
+    if (!data?.root) return undefined;
+    let cancelled = false;
+    const ctx = `${data.root.title}\n${data.root.body}`.slice(0, 600);
+    fetchVerdicts([
+      { id: data.root.id, kind: "forum_thread", text: threadModerationText(data.root.title, data.root.body) },
+      ...data.replies.map((r) => ({ id: r.id, kind: "forum_reply", text: r.body, context: ctx })),
+    ])
+      .then((m) => !cancelled && setAiVerdicts(m))
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [data]);
+
+  const reveal = (id) => setRevealedIds((prev) => new Set(prev).add(id));
+  const aiLabel = (id) =>
+    t("dao.aiModeration.flaggedNotice", {
+      category: primaryCategoryLabel(aiVerdicts.get(id)),
+      defaultValue: "Flagged by the automatic AI check ({{category}})",
+    });
+
   async function handleReply(e) {
     e.preventDefault();
     if (!reply.trim()) return;
     setBusy(true);
     setError(null);
-    const res = await forum.postReply(id, reply.trim());
+    const res = await forum.postReply(id, reply.trim(), `${data.root.title}\n${data.root.body}`.slice(0, 600));
+
     setBusy(false);
     if (res.success) {
       setReply("");
@@ -122,7 +157,13 @@ export default function ForumThreadPage() {
         {t("dao.forumThread.backToForum")}
       </Link>
 
-      <h1 className="font-display text-2xl text-parchment mt-4 mb-2">{data.root.title}</h1>
+      <h1
+        className={`font-display text-2xl text-parchment mt-4 mb-2 ${
+          isFlagged(aiVerdicts.get(data.root.id)) && !revealedIds.has(data.root.id) ? "blur-sm select-none" : ""
+        }`}
+      >
+        {data.root.title}
+      </h1>
       <div className="font-mono text-xs text-parchmentDim mb-6 flex items-center gap-1.5">
         <ForumAuthor pubkey={data.root.pubkey} address={data.root.address} size={32} /> · {fmtRelative(data.root.createdAt)}
         <button
@@ -135,8 +176,13 @@ export default function ForumThreadPage() {
       </div>
 
       <div className="border-b border-hairline pb-6 mb-6">
-        {rootState.blurred ? (
-          <BlurredBody>
+        {rootState.blurred || isFlagged(aiVerdicts.get(data.root.id)) ? (
+          <BlurredBody
+            label={rootState.blurred ? t("dao.forumModeration.stateBlurred") : aiLabel(data.root.id)}
+            icon={rootState.blurred ? AlertTriangle : Sparkles}
+            revealed={revealedIds.has(data.root.id)}
+            onReveal={() => reveal(data.root.id)}
+          >
             <p className="text-parchment text-sm leading-relaxed whitespace-pre-wrap">{data.root.body}</p>
           </BlurredBody>
         ) : (
@@ -163,8 +209,13 @@ export default function ForumThreadPage() {
                   <Flag size={12} />
                 </button>
               </div>
-              {rState.blurred ? (
-                <BlurredBody>
+              {rState.blurred || isFlagged(aiVerdicts.get(r.id)) ? (
+                <BlurredBody
+                  label={rState.blurred ? t("dao.forumModeration.stateBlurred") : aiLabel(r.id)}
+                  icon={rState.blurred ? AlertTriangle : Sparkles}
+                  revealed={revealedIds.has(r.id)}
+                  onReveal={() => reveal(r.id)}
+                >
                   <p className="text-parchment text-sm leading-relaxed whitespace-pre-wrap">{r.body}</p>
                 </BlurredBody>
               ) : (

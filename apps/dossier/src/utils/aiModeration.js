@@ -57,7 +57,7 @@ const MIN_SCAN_CHARS = 12;
 const LINK_RE = /https?:\/\/|www\./i;
 
 const CACHE_MAX = 1500;
-// Timeouts are chosen to OUTLAST the server's own 15 s Gemini timeout
+// Timeouts are chosen to OUTLAST the server's own 25 s Gemini timeout
 // (moderation.js → LIMITS.geminiTimeoutMs), otherwise the browser gives up
 // while the server is still waiting and a healthy answer is thrown away.
 const DEFAULT_TIMEOUT_MS = 28_000; // display-time lookups (non-blocking)
@@ -368,18 +368,25 @@ export async function fetchVerdicts(
 // ── pre-publish gate ───────────────────────────────────────────────────────
 
 const GATE_TTL_MS = 10 * 60 * 1000;
-const gateResults = new Map(); // text hash -> { allowed, at, result, reason }
+const gateResults = new Map(); // kind+text hash -> { allowed, at, result, reason }
+
+// Keyed by KIND as well as text: an outcome for one kind of content (possibly
+// "published without a verdict" during an outage) must never be reused to
+// wave through the same text as a different kind (e.g. a comment vs a post).
+// Every call site pairs the UI gate and assertPublishAllowed() with the SAME
+// kind, so the second gate still finds the first one's entry.
+const gateKey = (kind, text) => hash53(`${kind || "post"}\u0001${String(text || "").trim()}`);
 
 /**
  * Remembers the outcome for a text, so that a SECOND gate further down the
  * call chain (assertPublishAllowed() inside the publishing hooks) does not
  * ask the AI again — and, above all, cannot answer differently — for the very
- * same text the UI gate has just judged, even though it knows a different
- * `kind`/`context` (which would otherwise be a different cache key).
+ * same kind+text the UI gate has just judged, even though it knows a different
+ * `context` (which would otherwise be a different cache key).
  */
-function rememberGate(text, entry) {
+function rememberGate(kind, text, entry) {
   if (gateResults.size > 500) gateResults.delete(gateResults.keys().next().value);
-  gateResults.set(hash53(String(text || "").trim()), { ...entry, at: Date.now() });
+  gateResults.set(gateKey(kind, text), { ...entry, at: Date.now() });
 }
 
 function unavailableReason() {
@@ -442,7 +449,7 @@ export async function checkBeforePublish({
     if (closed) {
       return { allowed: false, unavailable: true, result: null, reason: unavailableReason() };
     }
-    rememberGate(text, { allowed: true, result: null });
+    rememberGate(kind, text, { allowed: true, result: null });
     return { allowed: true, result: null };
   }
 
@@ -462,10 +469,10 @@ export async function checkBeforePublish({
       defaultValue:
         "Atticus AI stopped this from being published (reason: {{category}}). If you think this is a mistake, rephrase the text or contact the moderators.",
     });
-    rememberGate(text, { allowed: false, result, reason });
+    rememberGate(kind, text, { allowed: false, result, reason });
     return { allowed: false, result, reason };
   }
-  rememberGate(text, { allowed: true, result });
+  rememberGate(kind, text, { allowed: true, result });
   return { allowed: true, result };
 }
 
@@ -474,7 +481,7 @@ export async function checkBeforePublish({
  * publish (createLensPost, createLensComment, the violation / help-request /
  * profile saves). The UI buttons already call checkPostRateLimit() — this
  * makes sure that a future screen, a refactor or a forgotten call site
- * cannot publish unchecked. If the same text was judged in the last 10
+ * cannot publish unchecked. If the same kind+text was judged in the last 10
  * minutes (by the UI gate) that outcome is reused: no second wait, no
  * second opinion.
  *
@@ -482,7 +489,7 @@ export async function checkBeforePublish({
  *   a ready-to-show message.
  */
 export async function assertPublishAllowed({ text, kind = "post", context = "" }) {
-  const recent = gateResults.get(hash53(String(text || "").trim()));
+  const recent = gateResults.get(gateKey(kind, text));
   if (recent && Date.now() - recent.at < GATE_TTL_MS) {
     if (recent.allowed) return recent.result || null;
     throw Object.assign(new Error(recent.reason), { code: "MODERATION_BLOCKED", moderation: recent.result });

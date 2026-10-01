@@ -276,15 +276,35 @@ test("assertPublishAllowed: REUSES what the UI gate just decided (no second wait
   // UI gate judged it with a context …
   await checkBeforePublish({ text: longer("A normal comment about the arrest"), kind: "comment", context: "parent post text" });
   const n = calls.length;
-  // … the hook then asks with a DIFFERENT kind/context (it doesn't know them): must not hit the server again.
-  await assertPublishAllowed({ text: longer("A normal comment about the arrest"), kind: "post" });
+  // … the hook then asks with the same kind but WITHOUT the context (it doesn't know it): must not hit the server again.
+  await assertPublishAllowed({ text: longer("A normal comment about the arrest"), kind: "comment" });
   assert.equal(calls.length, n);
 
   // and a refusal by the UI gate is repeated verbatim
   await checkBeforePublish({ text: longer("SCAM claim your airdrop"), kind: "comment" });
   const m = calls.length;
-  await assert.rejects(() => assertPublishAllowed({ text: longer("SCAM claim your airdrop"), kind: "post" }), /Atticus AI stopped this/);
+  await assert.rejects(() => assertPublishAllowed({ text: longer("SCAM claim your airdrop"), kind: "comment" }), /Atticus AI stopped this/);
   assert.equal(calls.length, m);
+});
+
+test("assertPublishAllowed: the gate is keyed by KIND — the same text as a different kind is judged afresh", async () => {
+  await checkBeforePublish({ text: longer("A normal text judged as a comment"), kind: "comment" });
+  const n = calls.length;
+  await assertPublishAllowed({ text: longer("A normal text judged as a comment"), kind: "post" });
+  assert.equal(calls.length, n + 1, "post ≠ comment → a fresh check");
+});
+
+test("an outage 'published without a verdict' for one kind is NOT reused to wave through another kind", async () => {
+  _setModerationMode({ strict: true, failOpen: ["comment"] }); // comments fail open, posts fail closed
+  mode = "500";
+  const text = longer("identical text sent first as a comment and then as a post");
+  const asComment = await checkBeforePublish({ text, kind: "comment" });
+  assert.equal(asComment.allowed, true, "comment fails open during the outage");
+  await assert.rejects(
+    () => assertPublishAllowed({ text, kind: "post" }),
+    (err) => err.code === "MODERATION_BLOCKED" && err.unavailable === true,
+    "the comment's unverified pass must not be reused for a post (strict kind)",
+  );
 });
 
 test("assertPublishAllowed: strict mode + outage throws 'unavailable' (nothing unchecked reaches Lens)", async () => {
@@ -300,7 +320,7 @@ test("assertPublishAllowed: open mode + outage waits ONCE, then the hook does no
   mode = "500";
   await checkBeforePublish({ text: longer("comment published in open mode") });
   const n = calls.length;
-  await assertPublishAllowed({ text: longer("comment published in open mode"), kind: "comment" });
+  await assertPublishAllowed({ text: longer("comment published in open mode"), kind: "post" });
   assert.equal(calls.length, n);
 });
 

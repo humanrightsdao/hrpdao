@@ -1,11 +1,12 @@
 import { useEffect, useState } from "react";
 import { Link, useOutletContext } from "react-router-dom";
 import { useTranslation } from "react-i18next";
-import { MessagesSquare, Plus, MessageCircle, Loader2, AlertTriangle } from "lucide-react";
+import { MessagesSquare, Plus, MessageCircle, Loader2, AlertTriangle, Sparkles } from "lucide-react";
 import { useForum } from "../hooks/useForum";
 import ForumAuthor from "../components/ForumAuthor";
 import { fmtRelative } from "../lib/format";
 import { tDaoMessage } from "../lib/daoMessages";
+import { fetchVerdicts, isFlagged, threadModerationText } from "../lib/aiModeration";
 import NewThreadModal from "../components/NewThreadModal";
 import { fetchAllForumModActions, computeModerationState, computeBanState } from "../lib/forumModeration";
 
@@ -28,12 +29,35 @@ export default function ForumPage() {
   // useForum.js's note that Nostr relays don't reliably support real
   // deletion).
   const [modActions, setModActions] = useState([]);
+  // AI verdicts (thread id → result) for the newest threads; a flagged
+  // thread's title is blurred in the list (the thread page has the
+  // "click to reveal"). No verdict (service down) = nothing blurred.
+  const [aiVerdicts, setAiVerdicts] = useState(() => new Map());
 
   useEffect(() => {
     forum.loadThreads();
     fetchAllForumModActions().then(setModActions).catch(() => {});
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  useEffect(() => {
+    if (forum.threads.length === 0) return undefined;
+    let cancelled = false;
+    // Newest 40 only: keeps the first visit cheap; verdicts are cached (in the
+    // browser and, shared for everyone, on the server) afterwards.
+    fetchVerdicts(
+      forum.threads.slice(0, 40).map((th) => ({
+        id: th.id,
+        kind: "forum_thread",
+        text: threadModerationText(th.title, th.body),
+      })),
+    )
+      .then((m) => !cancelled && setAiVerdicts(m))
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [forum.threads]);
 
   const totalEligibleVoters = Number(dao.shieldInfo?.totalSupply || 0);
   const modState = {};
@@ -128,7 +152,14 @@ export default function ForumPage() {
                 {modState[th.id]?.blurred && (
                   <AlertTriangle size={13} className="text-gold shrink-0" title={t("dao.forumModeration.stateBlurred")} />
                 )}
-                {th.title}
+                {isFlagged(aiVerdicts.get(th.id)) && (
+                  <Sparkles
+                    size={13}
+                    className="text-gold shrink-0"
+                    title={t("dao.aiModeration.flaggedShort", { defaultValue: "Flagged by the automatic AI check" })}
+                  />
+                )}
+                <span className={isFlagged(aiVerdicts.get(th.id)) ? "blur-sm select-none" : ""}>{th.title}</span>
               </span>
               <div className="font-mono text-[12px] text-parchmentDim mt-1 flex items-center gap-1.5">
                 <ForumAuthor pubkey={th.pubkey} address={th.address} size={32} /> · {fmtRelative(th.createdAt)}

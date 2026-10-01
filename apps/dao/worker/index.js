@@ -13,6 +13,17 @@
 // worker needs its own copy.
 
 import { verifyMessage } from "viem";
+import {
+  parseModerationRequest,
+  moderateItems,
+  createMemoryCache,
+  createLayeredCache,
+  createRateLimiter,
+  isAllowedOrigin,
+  parseAllowedOrigins,
+  summarizeResults,
+  PROMPT_VERSION,
+} from "./moderation.js";
 
 const MODEL = "gemini-3-flash-preview";
 
@@ -489,12 +500,108 @@ function handleChatStream(request, env, ctx) {
   })();
 }
 
+// ── AI content moderation ("Atticus Guard") ────────────────────────────────
+// Same engine as dossier's worker/moderation.js (byte-identical, see the
+// header comment in that file) — forum threads/replies and governance
+// proposals are moderated through the exact same rules + Gemini pipeline.
+// POST /api/moderate  { items: [{ id?, kind, text, context? }] }
+//   kinds used by THIS app: "forum_thread", "forum_reply", "proposal"
+//   → { success, model, promptVersion, results: [...] }
+// See dossier's AI_MODERATION.md for the full design notes; this worker
+// only wires the same engine into a route.
+const moderationMemoryCache = createMemoryCache();
+// Items (not requests) per minute per IP.
+const moderationLimiter = createRateLimiter({ limit: 240, windowMs: 60 * 1000 });
+
+function moderationJson(data, status = 200, extraHeaders = {}) {
+  return new Response(JSON.stringify(data), {
+    status,
+    headers: {
+      "Content-Type": "application/json",
+      // Verdicts are per-content and cheap to recompute from our own cache;
+      // never let an intermediate cache keep a stale "allow".
+      "Cache-Control": "no-store",
+      ...extraHeaders,
+    },
+  });
+}
+
+async function handleModerate(request, env) {
+  if (
+    !isAllowedOrigin(
+      request.headers.get("Origin"),
+      request.url,
+      parseAllowedOrigins(env.MODERATION_ALLOWED_ORIGINS),
+    )
+  ) {
+    return moderationJson({ success: false, error: "forbidden_origin" }, 403);
+  }
+
+  let body;
+  try {
+    body = await request.json();
+  } catch {
+    return moderationJson({ success: false, error: "invalid_body" }, 400);
+  }
+
+  const parsed = parseModerationRequest(body);
+  if (!parsed.ok) {
+    return moderationJson({ success: false, error: parsed.error }, parsed.status);
+  }
+
+  if (env.MODERATION_ENABLED === "false") {
+    return moderationJson({ success: true, disabled: true, results: [] });
+  }
+
+  const ip = request.headers.get("CF-Connecting-IP") || "unknown";
+  const limit = moderationLimiter.take(ip, parsed.items.length);
+  if (!limit.ok) {
+    return moderationJson(
+      { success: false, error: "rate_limited", retryAfterSec: limit.retryAfterSec },
+      429,
+      { "Retry-After": String(limit.retryAfterSec) },
+    );
+  }
+
+  const model = env.MODERATION_MODEL || MODEL;
+  const cache = createLayeredCache(moderationMemoryCache, env.MODERATION_KV || null);
+  const startedAt = Date.now();
+  const results = await moderateItems(parsed.items, {
+    apiKey: env.GEMINI_MODERATION_API_KEY || env.GEMINI_API_KEY,
+    model,
+    cache,
+  });
+  console.log(
+    `🛡️ moderation: ${parsed.items.length} item(s) → ${summarizeResults(results)} (${Date.now() - startedAt}ms)`,
+  );
+
+  return moderationJson({
+    success: true,
+    model,
+    promptVersion: PROMPT_VERSION,
+    results: results.map((r, i) => ({ id: parsed.ids[i], ...r })),
+  });
+}
+
 export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
 
     if (url.pathname === "/api/health") {
-      return json({ status: "ok", model: MODEL });
+      return json({
+        status: "ok",
+        model: MODEL,
+        moderation: {
+          enabled: env.MODERATION_ENABLED !== "false",
+          configured: Boolean(env.GEMINI_MODERATION_API_KEY || env.GEMINI_API_KEY),
+          sharedCache: Boolean(env.MODERATION_KV),
+          promptVersion: PROMPT_VERSION,
+        },
+      });
+    }
+
+    if (url.pathname === "/api/moderate" && request.method === "POST") {
+      return await handleModerate(request, env);
     }
 
     if (url.pathname === "/api/chat" && request.method === "POST") {

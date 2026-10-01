@@ -25,7 +25,7 @@
 // changes what THIS app chooses to render.
 
 import { pool, RELAYS, publishEvent } from "./nostrLookup";
-import { FORUM_TAG, FORUM_REPORT_TAG } from "../hooks/useForum";
+import { FORUM_TAG, FORUM_REPORT_TAG } from "./forumTags";
 
 export const MOD_ACTION_TAG = `${FORUM_TAG}-mod-action`;
 

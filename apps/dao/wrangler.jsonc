@@ -35,5 +35,12 @@
 			"id": "a45f79e1e24e465893e2ffa832f85433",
 			"preview_id": "f20d0121279f4f609a65513fa8861906"
 		}
+		// OPTIONAL — a GLOBAL cache for AI moderation verdicts (see AI_MODERATION.md
+		// in dossier's repo for the full design). Without it the Worker still
+		// works fine: verdicts are cached per isolate only.
+		// To enable: npx wrangler kv namespace create MODERATION_KV, then add a
+		// comma above and uncomment:
+		//
+		// ,{ "binding": "MODERATION_KV", "id": "<the id printed by the command above>" }
 	]
 }

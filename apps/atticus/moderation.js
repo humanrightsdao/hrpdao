@@ -2,13 +2,17 @@
 //
 // AI content moderation engine ("Atticus Guard").
 //
-// ⚠️ THIS FILE EXISTS IN TWO PLACES and must stay byte-identical:
-//     - worker/moderation.js   (Cloudflare Worker — production)
-//     - server/moderation.js   (Express Atticus backend — local dev)
-//   Same reason worker/index.js mirrors server/index.js: the two runtimes
+// ⚠️ THIS FILE EXISTS IN THREE PLACES and must stay byte-identical:
+//     - dossier: worker/moderation.js   (Cloudflare Worker — production)
+//     - atticus: moderation.js          (Express backend — local dev of dossier;
+//                                        the `server/` folder in the dossier repo)
+//     - dao:     worker/moderation.js   (the DAO app's own Cloudflare Worker)
+//   Same reason worker/index.js mirrors server/index.js: the runtimes/apps
 //   can't share a bundle. The file has NO dependencies and only uses
 //   web-standard APIs (fetch, crypto.subtle, AbortController, URL), so the
-//   very same code runs in both Workers and Node 18+.
+//   very same code runs in Workers and Node 18+. Any change (policy prompt,
+//   thresholds, kinds) must be applied to all three copies, and the tests
+//   (moderation.test.js, also identical) re-run in each.
 //
 // What it does
 // ────────────
@@ -55,7 +59,7 @@
 // ── Configuration ─────────────────────────────────────────────────────────
 
 /** Bump to invalidate every cached verdict (e.g. after changing the policy prompt). */
-export const PROMPT_VERSION = "2026-09-1";
+export const PROMPT_VERSION = "2026-09-2";
 
 export const LIMITS = {
   maxItemsPerRequest: 20,
@@ -77,7 +81,12 @@ export const LIMITS = {
   geminiTimeoutMs: 25000,
 };
 
-export const KINDS = ["post", "comment", "violation", "help_request", "profile"];
+export const KINDS = [
+  "post", "comment", "violation", "help_request", "profile",
+  // Shared with the `dao` app (Human Rights Policy DAO governance site):
+  // forum threads/replies and on-chain governance proposals.
+  "forum_thread", "forum_reply", "proposal",
+];
 
 export const CATEGORIES = [
   "spam",
@@ -233,7 +242,7 @@ const INVEST_SCAM_C = rx(
 const INJECTION_PATTERNS = [
   /ignore\s+(all\s+|any\s+)?(the\s+)?(previous|prior|above|earlier)\s+(instructions?|rules?|prompts?)/i,
   /disregard\s+(all\s+|any\s+)?(the\s+)?(previous|prior|above|earlier)/i,
-  /(mark|classify|label|rate|treat|output)\s+(this|it|the\s+(post|comment|text|item))\s+(as\s+)?(safe|allowed?|ok|clean|harmless|allow|verdict)/i,
+  /(mark|classify|label|rate|treat|output)\s+(this|it|(this|the)\s+(post|comment|text|item|proposal|thread|reply))\s+(as\s+)?(safe|allowed?|ok|clean|harmless|allow|verdict)/i,
   /you\s+are\s+(now\s+)?(a|an)\s+[\w\s]{0,30}(moderator|assistant|ai|classifier)/i,
   /(system|developer)\s+(prompt|message|instruction)s?/i,
   /"?severity"?\s*:\s*0\b/i,
@@ -344,11 +353,14 @@ export function runRules(item) {
 
 // ── Prompt ────────────────────────────────────────────────────────────────
 
-const POLICY_PROMPT = `You are the content-safety classifier for "Dossier", a public human-rights documentation platform run by Human Rights Policy DAO. People publish testimonies of human-rights violations, requests for help, posts and comments. Classify every <item> below.
+const POLICY_PROMPT = `You are the content-safety classifier for the Human Rights Policy DAO ecosystem: "Dossier" (a public human-rights documentation platform), its member community forum, and its on-chain governance proposals ("dao"). People publish testimonies of human-rights violations, requests for help, posts, comments, forum discussions, and governance proposals. Classify every <item> below.
 
 CRITICAL CONTEXT — READ CAREFULLY
 - The platform exists so that people can document abuse. Descriptions of violence, torture, war crimes, police brutality, sexual violence (as testimony), corruption, criminal cases, and NAMED public officials or alleged perpetrators taken from public records or court documents are LEGITIMATE. Graphic or disturbing content is NOT a violation by itself. Classify it as severity 0.
 - You cannot verify facts. NEVER judge whether an allegation or testimony is true. Do not flag content because it is unverified, one-sided, angry, political, or harshly critical of governments, courts, police, companies or public figures. Profanity aimed at institutions is allowed.
+- Governance proposals (kind "proposal") may propose sanctioning a named DAO member, repealing a policy, or replacing DAO leadership — this is normal governance, not harassment or hate speech, unless it independently meets one of the categories below (e.g. a genuine threat of violence against the named person, or doxxing their private data).
+- A governance proposal (kind "proposal") is a title + description that, if submitted, is PERMANENTLY RECORDED ON-CHAIN and cannot be removed afterwards. Judge ONLY the text against the categories below — not whether the proposal is wise, wasteful or something you disagree with. Funding a legitimate-sounding cause, changing a parameter or sanctioning a member is NOT itself a violation. Do flag a proposal whose TEXT solicits seed phrases, promotes a scam, contains hate speech, threatens or doxxes a named person, or asks to fund an illegal purchase.
+- A forum thread (kind "forum_thread") starts with its TITLE on the first line, followed by a blank line and the body: judge both. A reply (kind "forum_reply") may come with the thread it answers as <context>.
 - Only flag content that harms people or the platform in the ways listed below.
 
 CATEGORIES (use only these ids)
@@ -361,7 +373,7 @@ CATEGORIES (use only these ids)
 - sexual_content: pornographic or explicit sexual content. (Survivor testimony describing abuse is legitimate.)
 - child_safety: sexualisation or exploitation of minors, or material facilitating it. Always severity 3.
 - self_harm: encouraging or instructing suicide or self-harm.
-- illegal_goods: offers to sell drugs, weapons, forged documents, stolen data or similar.
+- illegal_goods: offers to sell drugs, weapons, forged documents, stolen data or similar, INCLUDING when phrased as a governance proposal to fund such a purchase.
 - other: a clear, serious problem that fits none of the above.
 
 SEVERITY: 0 = nothing wrong · 1 = minor, borderline, or probably low-quality/bot-like · 2 = clear violation · 3 = critical (sexual exploitation of minors; credible threat to life; terrorist recruitment or attack planning; instructions for mass-casualty weapons).

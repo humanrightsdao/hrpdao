@@ -38,6 +38,9 @@ import { ethers } from "ethers";
 import { useAccount } from "wagmi";
 import { usePrivy } from "@privy-io/react-auth";
 import { fmtDuration } from "../lib/format";
+// ADDED: mandatory AI content check for governance proposals — see the
+// comment inside submitProposal() below.
+import { assertPublishAllowed } from "../lib/aiModeration";
 
 // ─────────────────────────────────────────────────────────────
 //  Network configuration
@@ -366,6 +369,34 @@ const SHIELD_ABI = [
   "event ShieldMinted(address indexed account, uint256 tokenId)",
   "event Slashed(address indexed account, uint256 tokenId, bytes32 violationPostRef)",
 ];
+
+// ── Public (wallet-independent) read of the DAO participant count ──
+// "Participant" = holder of a ShieldSBT: Shield is the base membership
+// status of the DAO (1 address = 1 non-transferable token), and
+// CouncilSBT.mint() requires an active Shield — so every Council member
+// is already counted in ShieldSBT.totalSupply(), and this single number
+// is the total number of DAO participants.
+//
+// Why a separate provider instead of readRef/shieldReadRef: those refs
+// are only created in _initContracts(), i.e. AFTER a wallet connects.
+// The participant count is public data that a visitor without a wallet
+// should see too, so it gets its own lazily-created read-only contract.
+let _publicShieldRead = null;
+function _getPublicShieldRead() {
+  if (!_publicShieldRead) {
+    const provider = new ethers.JsonRpcProvider(
+      ACTIVE_CHAIN.rpcUrls[0],
+      ACTIVE_CHAIN.chainIdDec,
+      { staticNetwork: true },
+    );
+    _publicShieldRead = new ethers.Contract(
+      CONTRACTS.shieldSBT,
+      SHIELD_ABI,
+      provider,
+    );
+  }
+  return _publicShieldRead;
+}
 
 const COUNCIL_ABI = [
   "function balanceOf(address owner) external view returns (uint256)",
@@ -804,6 +835,9 @@ export function useDao() {
   // the specific ModerationQueue.jsx card.
   const [sanctionProposals, setSanctionProposals] = useState([]);
   const [govParams, setGovParams] = useState(null); // { rights: {...}, council: {...} }
+  // Total number of DAO participants (ShieldSBT.totalSupply()); null until
+  // loaded or if the contract address isn't configured / unreachable.
+  const [memberCount, setMemberCount] = useState(null);
   const [connecting, setConnecting] = useState(false);
   const [loadingProposals, setLoadingProposals] = useState(false);
   const [loadingSanctionProposals, setLoadingSanctionProposals] =
@@ -2563,6 +2597,7 @@ export function useDao() {
 
       const timelockAddr = CONTRACTS.daoTimelock;
       const fullDesc = title + (description ? "\n" + description : "");
+
       let targets = [],
         values = [],
         calldatas = [];
@@ -2628,6 +2663,28 @@ export function useDao() {
         targets = [CONTRACTS.shieldSBT];
         values = [0n];
         calldatas = [calldata];
+      }
+
+      // MANDATORY AI content check ("Atticus Guard"). Unlike forum posts (which
+      // have a report queue, Shield/Council review and can be blurred/hidden
+      // after the fact — see lib/forumModeration.js), a governance proposal is
+      // permanent and public the instant it lands on-chain: no blur, no hide,
+      // no other moderation at all. So kind "proposal" is MANDATORY in
+      // lib/aiModeration.js (MANDATORY_KINDS): no real verdict (Gemini down)
+      // → the proposal is refused with a "try again" message. The rule hangs on
+      // the kind, so it cannot be lost by editing this call.
+      // Runs AFTER all parameter validation above (an invalid proposal never
+      // costs a Gemini call) and BEFORE gas estimation / any wallet prompt (a
+      // refusal never costs the member a wasted signature).
+      try {
+        await assertPublishAllowed({ text: fullDesc, kind: "proposal" });
+      } catch (err) {
+        return {
+          success: false,
+          error: err.message || "Content check failed.",
+          isModeration: err?.code === "MODERATION_BLOCKED",
+          moderationUnavailable: Boolean(err?.unavailable),
+        };
       }
 
       try {
@@ -3178,6 +3235,22 @@ export function useDao() {
     }
   }, []);
 
+  // ── Total participant count ────────────────────────────────
+  // Works with or without a connected wallet (see _getPublicShieldRead).
+  // On failure the previous value is kept, so a transient RPC hiccup
+  // doesn't blank out a number that was already shown.
+  const loadMemberCount = useCallback(async () => {
+    if (PLACEHOLDER_ADDRESSES.includes(CONTRACTS.shieldSBT)) return;
+    try {
+      const supply = await _withRetry(() =>
+        _getPublicShieldRead().totalSupply(),
+      );
+      setMemberCount(Number(supply));
+    } catch (err) {
+      console.warn("loadMemberCount:", err?.message || err);
+    }
+  }, []);
+
   // ── Public interface ──────────────────────────────────
 
   return {
@@ -3198,6 +3271,7 @@ export function useDao() {
     proposals,
     sanctionProposals,
     govParams,
+    memberCount,
     connecting,
     setConnecting,
     loadingProposals,
@@ -3223,6 +3297,7 @@ export function useDao() {
     queueProposal,
     executeProposal,
     loadGovParams,
+    loadMemberCount,
     refreshTokenStatus,
     // Geo reform STAGE 2-4
     declareLocation,
