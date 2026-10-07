@@ -1012,7 +1012,7 @@
     "atticus": {
       "triggerTitle": "Atticus — asesor de IA en derechos humanos",
       "subtitle": "Asesor de IA en derechos humanos",
-      "welcomeMessage": "Hola, soy Atticus — el asesor de IA de esta DAO en derechos humanos. Pregúntame sobre la Policy, tus derechos como miembro, artículos concretos de la ley o cómo presentar una denuncia por una violación.",
+      "welcomeMessage": "Hola, soy Atticus — asesor de IA en derechos humanos fundamentales. Pregúntame sobre tus derechos, artículos concretos de las leyes o cómo presentar una denuncia por una violación.",
       "inputPlaceholder": "Preguntar a Atticus…",
       "serverError": "El servidor de Atticus respondió con un error ({{status}})",
       "connectionError": "No se pudo conectar con el servidor de Atticus. Verifica que apps/ai esté en ejecución (npm run dev, puerto {{port}})."

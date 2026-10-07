@@ -1012,7 +1012,7 @@
     "atticus": {
       "triggerTitle": "アティカス — AI人権アドバイザー",
       "subtitle": "AI人権アドバイザー",
-      "welcomeMessage": "こんにちは、アティカスです — このDAOのAI人権アドバイザーです。Policyについて、メンバーとしての権利、法律の具体的な条項、または違反の申し立て方法について、何でも聞いてください。",
+      "welcomeMessage": "こんにちは、アティカスです — 基本的人権に関するAIアドバイザーです。あなたの権利、法律の具体的な条項、または違反の申し立て方法について、何でも聞いてください。",
       "inputPlaceholder": "アティカスに質問…",
       "serverError": "Atticusサーバーがエラーを返しました（{{status}}）",
       "connectionError": "Atticusサーバーに接続できませんでした。apps/aiが起動しているか確認してください（npm run dev、ポート{{port}}）。"

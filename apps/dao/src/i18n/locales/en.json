@@ -1016,7 +1016,7 @@
     "atticus": {
       "triggerTitle": "Atticus — AI human rights advisor",
       "subtitle": "AI human rights advisor",
-      "welcomeMessage": "Hi, I'm Atticus — this DAO's AI human rights advisor. Ask me about the Policy, your rights as a member, specific articles of the law, or how to file a complaint about a violation.",
+      "welcomeMessage": "Hi, I'm Atticus — an AI advisor on fundamental human rights. Ask me about your rights, specific articles of the law, or how to file a complaint about a violation.",
       "inputPlaceholder": "Ask Atticus…",
       "serverError": "The Atticus server responded with an error ({{status}})",
       "connectionError": "Could not connect to the Atticus server. Check that apps/ai is running (npm run dev, port {{port}})."

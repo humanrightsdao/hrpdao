@@ -1012,7 +1012,7 @@
     "atticus": {
       "triggerTitle": "Atticus — KI-Menschenrechtsberater",
       "subtitle": "KI-Menschenrechtsberater",
-      "welcomeMessage": "Hallo, ich bin Atticus — der KI-Menschenrechtsberater dieser DAO. Fragen Sie mich zur Policy, zu Ihren Rechten als Mitglied, zu bestimmten Gesetzesartikeln oder wie Sie einen Verstoß melden können.",
+      "welcomeMessage": "Hallo, ich bin Atticus — KI-Berater für grundlegende Menschenrechte. Fragen Sie mich zu Ihren Rechten, zu bestimmten Gesetzesartikeln oder wie Sie einen Verstoß melden können.",
       "inputPlaceholder": "Atticus fragen…",
       "serverError": "Der Atticus-Server hat mit einem Fehler geantwortet ({{status}})",
       "connectionError": "Verbindung zum Atticus-Server nicht möglich. Prüfen Sie, ob apps/ai läuft (npm run dev, Port {{port}})."
