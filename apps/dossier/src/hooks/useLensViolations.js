@@ -111,6 +111,13 @@ const normalizeLensViolation = (lensPost) => {
     city: attr(attributes, "city"),
     region: attr(attributes, "region"),
     violation_date: attr(attributes, "violationDate"),
+    // ADDED: court decision data entered by the author at submission.
+    court_name: attr(attributes, "courtName"),
+    court_decision_date: attr(attributes, "courtDecisionDate"),
+    court_case_number: attr(attributes, "courtCaseNumber"),
+    court_decision_url: attr(attributes, "courtDecisionUrl"),
+    court_attested: attr(attributes, "courtAttested") === "true",
+    court_attested_at: attr(attributes, "courtAttestedAt"),
     category_id: categoryId,
     violation_type_id: violationTypeId,
     severity_level: severityLevel,
@@ -148,6 +155,21 @@ export default function useLensViolations() {
     return sessionClient;
   };
 
+  // ADDED: a violation is shown anywhere in the app (map, list, search,
+  // sidebar, country page, details) only if it carries the court
+  // decision data and the author's attestation (see ViolationsPage.jsx).
+  // Every reader goes through fetchViolations/fetchViolationById, so this
+  // is the one place to enforce it. Set to false to show everything again.
+  const REQUIRE_COURT_DECISION = true;
+  const hasCourtDecision = (v) =>
+    !REQUIRE_COURT_DECISION ||
+    !!(
+      v.court_attested &&
+      v.court_name &&
+      v.court_decision_date &&
+      v.court_case_number
+    );
+
   const fetchViolations = useCallback(
     async ({
       countryCode = null,
@@ -180,7 +202,9 @@ export default function useLensViolations() {
         if (result.isErr()) throw new Error(result.error.message);
 
         const { items, pageInfo } = result.value;
-        let violations = items.map(normalizeLensViolation);
+        let violations = items
+          .map(normalizeLensViolation)
+          .filter(hasCourtDecision);
 
         // ФІКС: раніше тут намагались фільтрувати по країні через
         // `tags: { oneOf: [countryCode, "violation"] }`, але oneOf — це
@@ -259,10 +283,12 @@ export default function useLensViolations() {
       if (result.isErr()) throw new Error(result.error.message);
       if (!result.value) throw new Error("Violation not found");
 
-      return {
-        success: true,
-        violation: normalizeLensViolation(result.value),
-      };
+      const violation = normalizeLensViolation(result.value);
+      if (!hasCourtDecision(violation)) {
+        throw new Error("Violation not found");
+      }
+
+      return { success: true, violation };
     } catch (err) {
       setError(err.message);
       return { success: false, error: err.message };

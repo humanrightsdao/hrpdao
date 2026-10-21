@@ -1648,9 +1648,9 @@
     "about": {
       "title": "About Us",
       "subtitle": "DAO — the governance layer of Human Rights Policy DAO",
-      "intro": "a decentralized autonomous organization through which the community governs moderation, sanctions, and policy for Dossier and the wider ecosystem — with no single company or back office making decisions alone.",
+      "intro": "a decentralized autonomous organization built on the idea of upholding fundamental human rights: the principle that natural rights to life, liberty, property and equality belong to every person regardless of state, territory or citizenship. Through it, the community governs moderation, sanctions and policy for Dossier and the wider ecosystem — with no single company or back office deciding alone.",
       "missionTitle": "Our Mission",
-      "missionDescription": "We believe decisions about moderating human rights reports, sanctioning accounts, and spending shared funds should be made transparently and accountably — by the community, not a single company or anonymous back office. The DAO moves those decisions on-chain, where anyone can verify them.",
+      "missionDescription": "To give people a single set of rules for peaceful coexistence — where the test of a violation is real harm to another person's rights — and the tools to document violations, support victims, spread knowledge of human rights and form consensus-based communities. We encourage resolving disputes in court, to reduce conflict and casualties.",
       "whatWeDoTitle": "What the platform does",
       "whatWeDoDescription": "The DAO combines several governance tools",
       "featureProposals": "Proposals and voting on rule changes, sanctions, and protocol parameters",
@@ -1660,15 +1660,16 @@
       "featureForum": "A forum for public discussion of proposals and policy",
       "featureAtticus": "Atticus, an AI advisor on human rights law",
       "decentralizedTitle": "Built on open, decentralized infrastructure",
-      "decentralizedDescription": "Proposals, votes, sanctions, and treasury movements are recorded by smart contracts (Governor, Treasury, HumanityGate, LocationRegistry) on a public blockchain, so the process is verifiable by anyone. Wallet authentication is shared with Dossier (the same Privy App ID), so a single account works across both apps.",
+      "decentralizedDescription": "Proposals, votes, sanctions, and treasury movements are recorded by smart contracts (Governor, Treasury, HumanityGate, LocationRegistry) on a public blockchain, so the process is verifiable by anyone. Wallet authentication is shared with Dossier (the same Privy App ID), so a single account works across both apps. The policy text is stored on IPFS, and its current version is ratified by on-chain governance.",
       "governanceTitle": "How decisions are made",
       "governanceDescription": "Anyone with the relevant governance rights (SHIELD or COUNCIL) can submit a proposal or vote. Proposals — including sanctions against Dossier accounts — go through public discussion on the forum and a vote, and the outcome is executed on-chain automatically, with no manual intervention.",
       "dossierTitle": "Relationship with Dossier",
       "dossierDescription": "Dossier is the app where people publish and discuss reports of human rights violations tied to a place and time. The DAO is the governance layer for that process: it reviews reports on Dossier content and decides on sanctions against accounts that break the rules. Both apps share the same wallet/account, but can operate independently of each other.",
       "independenceTitle": "Independence",
-      "independenceDescription": "The DAO is a technical interface to community-governed smart contracts. It is not a government body, a law-enforcement agency, or a substitute for legal or humanitarian services — see the Terms of Use for details on what the platform is and isn't.",
+      "independenceDescription": "The DAO is a technical interface to community-governed smart contracts. It is not a government body, a law-enforcement agency, or a substitute for legal or humanitarian services — see the Terms of Use for details on what the platform is and isn't. The project is not opposed to the state — it is an additional social tool.",
       "contactTitle": "Contact Us",
-      "contactDescription": "Questions, feedback, or partnership proposals can be sent through the app's forum or the DAO's governance and community channels."
+      "contactDescription": "Questions, feedback or partnership proposals — write to our email, or use the app's forum and the DAO's community channels.",
+      "slogan": "Join the human rights side!"
     },
     "privacy": {
       "title": "Privacy Policy",

@@ -395,11 +395,27 @@ export function LensAuthProvider({ children }) {
   // connected — it was just on the wrong network at the worst possible
   // moment). Checking the chain id here, before ANY Lens write, closes
   // that gap regardless of which page the user was on right before.
+  // ADDED: the single central wallet check for EVERY write (posts,
+  // violations, help requests, comments, follow/block, DAO...). If no
+  // wallet is connected at all, don't wait ~12s for a client that will
+  // never appear: pop the Privy login immediately and return null, so
+  // callers fail fast with their usual "Wallet not connected" error.
+  // isConnectedRef mirrors wagmi's isConnected (same reason as
+  // walletClientRef: async functions see a frozen closure value).
+  const isConnectedRef = useRef(isConnected);
+  useEffect(() => {
+    isConnectedRef.current = isConnected;
+  }, [isConnected]);
+
   const getWalletClient = async () => {
     let client = walletClientRef.current;
+    if (!client && !isConnectedRef.current && !loggingOutRef.current) {
+      connectWallet();
+      return null;
+    }
     if (!client || client.chain?.id !== 232) {
       await ensureCorrectNetwork();
-      client = await waitForWalletClient(5000, 232);
+      client = await waitForWalletClient(12000, 232);
     }
     return client;
   };

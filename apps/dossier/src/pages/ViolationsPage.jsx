@@ -99,6 +99,12 @@ const ViolationsPage = () => {
     violationDescription: "",
     violationDate: "",
     violationTime: "",
+    // ADDED: court decision confirmation (anti-defamation). Required.
+    courtName: "",
+    courtDecisionDate: "",
+    courtCaseNumber: "",
+    courtDecisionUrl: "",
+    courtAttested: false,
   });
 
   // ADDED: State for create post modal
@@ -548,6 +554,38 @@ const ViolationsPage = () => {
         `Description is too long (max ${MAX_VIOLATION_DESCRIPTION_LENGTH} characters)`;
     }
 
+    // ADDED: every violation must be backed by a court decision. The
+    // author names the court, date and number, and attests to accuracy.
+    if (!formData.courtName.trim()) {
+      errors.courtName = t("court_name_required");
+    }
+    if (!formData.courtDecisionDate) {
+      errors.courtDecisionDate = t("court_date_required");
+    } else {
+      const decisionDate = new Date(formData.courtDecisionDate);
+      const endOfToday = new Date();
+      endOfToday.setHours(23, 59, 59, 999);
+      if (decisionDate > endOfToday) {
+        errors.courtDecisionDate = t("date_cannot_be_future");
+      }
+    }
+    if (!formData.courtCaseNumber.trim()) {
+      errors.courtCaseNumber = t("court_number_required");
+    }
+    if (formData.courtDecisionUrl.trim()) {
+      try {
+        const u = new URL(formData.courtDecisionUrl.trim());
+        if (u.protocol !== "http:" && u.protocol !== "https:") {
+          throw new Error("bad protocol");
+        }
+      } catch {
+        errors.courtDecisionUrl = t("court_url_invalid");
+      }
+    }
+    if (!formData.courtAttested) {
+      errors.courtAttested = t("court_attest_required");
+    }
+
     if (formData.violationDate) {
       const selectedDate = new Date(formData.violationDate);
       const today = new Date();
@@ -722,6 +760,33 @@ const ViolationsPage = () => {
           },
           { key: "isAnonymous", value: "false", type: "String" },
           { key: "app", value: "hrpdao", type: "String" },
+          // ADDED: court decision data + the author's attestation.
+          {
+            key: "courtName",
+            value: formData.courtName.trim(),
+            type: "String",
+          },
+          {
+            key: "courtDecisionDate",
+            value: formData.courtDecisionDate,
+            type: "String",
+          },
+          {
+            key: "courtCaseNumber",
+            value: formData.courtCaseNumber.trim(),
+            type: "String",
+          },
+          {
+            key: "courtDecisionUrl",
+            value: formData.courtDecisionUrl.trim(),
+            type: "String",
+          },
+          { key: "courtAttested", value: "true", type: "String" },
+          {
+            key: "courtAttestedAt",
+            value: new Date().toISOString(),
+            type: "String",
+          },
           // PDFs can't live in `attachments` (see uploadFilesToGrove) since
           // Lens's attachment schema only knows Image/Video/Audio. Storing
           // them here as a JSON attribute keeps them structured data
@@ -1304,6 +1369,151 @@ const ViolationsPage = () => {
                     {formData.violationDescription.length} /{" "}
                     {MAX_VIOLATION_DESCRIPTION_LENGTH}
                   </p>
+                </div>
+              </div>
+
+              {/* ADDED: Court decision (anti-defamation confirmation) */}
+              <div className="p-4">
+                <h3 className="font-cinzel text-[11px] text-slate-600 dark:text-white/40 tracking-[0.12em] uppercase mb-1.5">
+                  {t("court_decision_title")}
+                </h3>
+                <p className="text-[13px] text-slate-600 dark:text-white/40 mb-3">
+                  {t("court_decision_hint")}
+                </p>
+                <div className="space-y-3">
+                  <div>
+                    <label className="block text-[14px] font-medium text-slate-700 dark:text-white/45 mb-1.5">
+                      {t("court_name")} <span className="text-red-400/70">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      value={formData.courtName}
+                      onChange={(e) =>
+                        setFormData((prev) => ({
+                          ...prev,
+                          courtName: e.target.value,
+                        }))
+                      }
+                      maxLength={200}
+                      placeholder={t("court_name_placeholder")}
+                      className={`w-full px-3 py-2 bg-slate-50 dark:bg-white/[0.03] border ${
+                        validationErrors.courtName
+                          ? "border-red-500/40"
+                          : "border-slate-300 dark:border-white/[0.09]"
+                      } rounded-lg text-[14px] text-slate-600 dark:text-white/65 placeholder-slate-300 dark:placeholder-white/[0.18] font-['Inter'] outline-none focus:border-blue-500/35 transition-all`}
+                    />
+                    {validationErrors.courtName && (
+                      <p className="text-[14px] text-red-400/70 mt-1.5">
+                        {validationErrors.courtName}
+                      </p>
+                    )}
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-[14px] font-medium text-slate-700 dark:text-white/45 mb-1.5">
+                      {t("court_decision_date")} <span className="text-red-400/70">*</span>
+                    </label>
+                    <input
+                      type="date"
+                      value={formData.courtDecisionDate}
+                      onChange={(e) =>
+                        setFormData((prev) => ({
+                          ...prev,
+                          courtDecisionDate: e.target.value,
+                        }))
+                      }
+                      max={new Date().toISOString().split("T")[0]}
+                      placeholder={""}
+                      className={`w-full px-3 py-2 bg-slate-50 dark:bg-white/[0.03] border ${
+                        validationErrors.courtDecisionDate
+                          ? "border-red-500/40"
+                          : "border-slate-300 dark:border-white/[0.09]"
+                      } rounded-lg text-[14px] text-slate-600 dark:text-white/65 placeholder-slate-300 dark:placeholder-white/[0.18] font-['Inter'] outline-none focus:border-blue-500/35 transition-all`}
+                    />
+                    {validationErrors.courtDecisionDate && (
+                      <p className="text-[14px] text-red-400/70 mt-1.5">
+                        {validationErrors.courtDecisionDate}
+                      </p>
+                    )}
+                  </div>
+                  <div>
+                    <label className="block text-[14px] font-medium text-slate-700 dark:text-white/45 mb-1.5">
+                      {t("court_case_number")} <span className="text-red-400/70">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      value={formData.courtCaseNumber}
+                      onChange={(e) =>
+                        setFormData((prev) => ({
+                          ...prev,
+                          courtCaseNumber: e.target.value,
+                        }))
+                      }
+                      maxLength={100}
+                      placeholder={t("court_number_placeholder")}
+                      className={`w-full px-3 py-2 bg-slate-50 dark:bg-white/[0.03] border ${
+                        validationErrors.courtCaseNumber
+                          ? "border-red-500/40"
+                          : "border-slate-300 dark:border-white/[0.09]"
+                      } rounded-lg text-[14px] text-slate-600 dark:text-white/65 placeholder-slate-300 dark:placeholder-white/[0.18] font-['Inter'] outline-none focus:border-blue-500/35 transition-all`}
+                    />
+                    {validationErrors.courtCaseNumber && (
+                      <p className="text-[14px] text-red-400/70 mt-1.5">
+                        {validationErrors.courtCaseNumber}
+                      </p>
+                    )}
+                  </div>
+                  </div>
+                  <div>
+                    <label className="block text-[14px] font-medium text-slate-700 dark:text-white/45 mb-1.5">
+                      {t("court_decision_url")}
+                    </label>
+                    <input
+                      type="url"
+                      value={formData.courtDecisionUrl}
+                      onChange={(e) =>
+                        setFormData((prev) => ({
+                          ...prev,
+                          courtDecisionUrl: e.target.value,
+                        }))
+                      }
+                      maxLength={500}
+                      placeholder={"https://"}
+                      className={`w-full px-3 py-2 bg-slate-50 dark:bg-white/[0.03] border ${
+                        validationErrors.courtDecisionUrl
+                          ? "border-red-500/40"
+                          : "border-slate-300 dark:border-white/[0.09]"
+                      } rounded-lg text-[14px] text-slate-600 dark:text-white/65 placeholder-slate-300 dark:placeholder-white/[0.18] font-['Inter'] outline-none focus:border-blue-500/35 transition-all`}
+                    />
+                    {validationErrors.courtDecisionUrl && (
+                      <p className="text-[14px] text-red-400/70 mt-1.5">
+                        {validationErrors.courtDecisionUrl}
+                      </p>
+                    )}
+                  </div>
+                  <div>
+                    <label className="flex items-start gap-2 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={formData.courtAttested}
+                        onChange={(e) =>
+                          setFormData((prev) => ({
+                            ...prev,
+                            courtAttested: e.target.checked,
+                          }))
+                        }
+                        className="mt-1 w-4 h-4 accent-[#8B1A2A]"
+                      />
+                      <span className="text-[14px] text-slate-700 dark:text-white/55">
+                        {t("court_attest_label")}
+                      </span>
+                    </label>
+                    {validationErrors.courtAttested && (
+                      <p className="text-[14px] text-red-400/70 mt-1.5">
+                        {validationErrors.courtAttested}
+                      </p>
+                    )}
+                  </div>
                 </div>
               </div>
 

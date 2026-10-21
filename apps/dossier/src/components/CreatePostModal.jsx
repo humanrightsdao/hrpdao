@@ -334,7 +334,7 @@ const CreatePostModal = ({ onClose }) => {
     } catch (err) {
       console.error("❌ Error creating Lens post:", err);
       setSubmitError(
-        t("error_creating_post") || "Publishing error: " + err.message,
+        `${t("error_creating_post")}${err?.message || ""}`.trim(),
       );
     }
   };

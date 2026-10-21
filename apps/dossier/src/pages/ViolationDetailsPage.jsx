@@ -20,6 +20,7 @@ import {
   ShieldAlert,
   Check,
   X,
+  Gavel,
 } from "lucide-react";
 import Layout from "../components/Layout";
 import useLensViolations from "../hooks/useLensViolations";
@@ -586,6 +587,80 @@ const ViolationDetailsPage = () => {
                         </p>
                       </div>
                     </div>
+
+                    {/* ADDED: court decision backing this violation */}
+                    {(violation.court_name ||
+                      violation.court_case_number ||
+                      violation.court_decision_date) && (
+                      <div>
+                        <h3 className="text-[11px] uppercase tracking-[0.1em] font-medium text-slate-500 dark:text-white/40 mb-2 flex items-center gap-1.5">
+                          <Gavel className="w-3 h-3" />
+                          {t("court_decision_title")}
+                        </h3>
+                        <div className="bg-slate-50 dark:bg-white/[0.025] border border-slate-200 dark:border-white/[0.06] rounded-lg p-3">
+                          <dl className="space-y-2">
+                          <div>
+                            <dt className="text-[11px] text-slate-500 dark:text-white/35">
+                              {t("court_name")}
+                            </dt>
+                            <dd className="text-[14px] text-slate-700 dark:text-white/55 break-words">
+                              {violation.court_name}
+                            </dd>
+                          </div>
+                          <div>
+                            <dt className="text-[11px] text-slate-500 dark:text-white/35">
+                              {t("court_decision_date")}
+                            </dt>
+                            <dd className="text-[14px] text-slate-700 dark:text-white/55 break-words">
+                              {violation.court_decision_date
+                                ? new Date(
+                                    `${violation.court_decision_date}T00:00:00`,
+                                  ).toLocaleDateString(
+                                    localStorage.getItem("i18nextLng") || "en",
+                                    {
+                                      year: "numeric",
+                                      month: "long",
+                                      day: "numeric",
+                                    },
+                                  )
+                                : ""}
+                            </dd>
+                          </div>
+                          <div>
+                            <dt className="text-[11px] text-slate-500 dark:text-white/35">
+                              {t("court_case_number")}
+                            </dt>
+                            <dd className="text-[14px] text-slate-700 dark:text-white/55 break-words">
+                              {violation.court_case_number}
+                            </dd>
+                          </div>
+                            {violation.court_decision_url && (
+                              <div>
+                                <dt className="text-[11px] text-slate-500 dark:text-white/35">
+                                  {t("court_decision_url")}
+                                </dt>
+                                <dd className="text-[14px]">
+                                  <a
+                                    href={violation.court_decision_url}
+                                    target="_blank"
+                                    rel="noopener noreferrer nofollow"
+                                    className="inline-flex items-center gap-1 text-blue-700 dark:text-blue-400/80 hover:underline break-all"
+                                  >
+                                    {violation.court_decision_url}
+                                    <ExternalLink className="w-3 h-3 flex-shrink-0" />
+                                  </a>
+                                </dd>
+                              </div>
+                            )}
+                          </dl>
+                          {violation.court_attested && (
+                            <p className="mt-3 pt-2 border-t border-slate-200 dark:border-white/[0.06] text-[12px] text-slate-500 dark:text-white/35">
+                              {t("court_attested_note")}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                    )}
 
                     {/* Violation type */}
                     {violation.violation_type_id && (

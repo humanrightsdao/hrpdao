@@ -1579,9 +1579,9 @@
     "about": {
       "title": "关于我们",
       "subtitle": "DAO — Human Rights Policy DAO 的治理层",
-      "intro": "一个去中心化自治组织，社区通过它管理 Dossier 及更广泛生态系统的内容审核、制裁与政策——不由任何单一公司或后台单方面决定。",
+      "intro": "一个基于遵守基本人权理念的去中心化自治组织：生命、自由、财产和平等这些自然权利属于每个人，无论其国家、领土或国籍。社区通过它管理 Dossier 及整个生态系统的审核、制裁和政策——没有任何单一公司或后台单独做决定。",
       "missionTitle": "我们的使命",
-      "missionDescription": "我们相信，关于人权报告审核、账户制裁以及共同资金使用的决策应当由社区以透明和负责任的方式做出，而不是由某个公司或匿名的后台单独决定。DAO 将这些决策放到链上，任何人都可以验证。",
+      "missionDescription": "为人们提供一套统一的和平共处规则——判定违规的标准是对他人权利造成的实际损害——并提供工具来记录侵权行为、支持受害者、传播人权知识以及建立基于共识的社区。我们鼓励通过法院解决争端，以减少冲突和伤亡。",
       "whatWeDoTitle": "平台的功能",
       "whatWeDoDescription": "DAO 整合了多种治理工具",
       "featureProposals": "关于规则变更、制裁及协议参数的提案与投票",
@@ -1591,15 +1591,16 @@
       "featureForum": "供公开讨论提案与政策的论坛",
       "featureAtticus": "Atticus——人权法方面的 AI 顾问",
       "decentralizedTitle": "构建于开放、去中心化的基础设施之上",
-      "decentralizedDescription": "提案、投票、制裁和资金库的资金变动由智能合约（Governor、Treasury、HumanityGate、LocationRegistry）记录在公共区块链上，因此该流程任何人都可以验证。钱包身份验证与 Dossier 共享（相同的 Privy App ID），因此同一账户可在两个应用中使用。",
+      "decentralizedDescription": "提案、投票、制裁和资金库的资金变动由智能合约（Governor、Treasury、HumanityGate、LocationRegistry）记录在公共区块链上，因此该流程任何人都可以验证。钱包身份验证与 Dossier 共享（相同的 Privy App ID），因此同一账户可在两个应用中使用。 政策文本存储在 IPFS 上，其当前版本由链上治理批准。",
       "governanceTitle": "决策是如何做出的",
       "governanceDescription": "任何拥有相应治理权限（SHIELD 或 COUNCIL）的人都可以提交提案或投票。提案——包括对 Dossier 账户的制裁——会在论坛上经过公开讨论并交由投票表决，结果会自动在链上执行，无需人工干预。",
       "dossierTitle": "与 Dossier 的关系",
       "dossierDescription": "Dossier 是人们发布和讨论与特定地点、时间相关的人权侵犯报告的应用。DAO 是这一流程的治理层：它审查关于 Dossier 内容的举报，并决定对违规账户实施何种制裁。两个应用共享同一个钱包/账户，但可以彼此独立运行。",
       "independenceTitle": "独立性",
-      "independenceDescription": "DAO 是通往由社区治理的智能合约的技术接口。它不是政府机构，不是执法机构，也不能替代法律或人道主义服务——有关平台是什么、不是什么的详细说明，请参阅使用条款。",
+      "independenceDescription": "DAO 是通往由社区治理的智能合约的技术接口。它不是政府机构，不是执法机构，也不能替代法律或人道主义服务——有关平台是什么、不是什么的详细说明，请参阅使用条款。 本项目并不与国家对立——它是一种额外的社会工具。",
       "contactTitle": "联系我们",
-      "contactDescription": "问题、反馈或合作提案可以通过应用内论坛或 DAO 的治理与社区渠道发送。"
+      "contactDescription": "如有问题、反馈或合作提议，请发送邮件至我们的邮箱，或使用应用论坛和 DAO 社区渠道。",
+      "slogan": "站在人权这一边！"
     },
     "privacy": {
       "title": "隐私政策",

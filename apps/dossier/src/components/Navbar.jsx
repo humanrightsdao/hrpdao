@@ -3,7 +3,8 @@ import React, { useState, useEffect, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import { useLocation, useNavigate } from "react-router-dom";
 import { ethers } from "ethers";
-import { Bot, Search, X, FileText } from "lucide-react";
+import { Bot, Search, X, FileText, Wallet } from "lucide-react";
+import { useLensAuth } from "../context/LensAuthContext";
 import AIAssistant from "./AIAssistant";
 import useUserInfo from "../hooks/useUserInfo";
 import { CONTRACTS, ACTIVE_CHAIN } from "../hooks/useLensDAO";
@@ -40,6 +41,12 @@ const Navbar = ({ visible = true }) => {
   const location = useLocation();
   const navigate = useNavigate();
   const { userInfo } = useUserInfo();
+  // ADDED: wallet status. The Lens session ("logged in") and the Privy
+  // wallet (signs transactions) are two independent states, so the UI
+  // can look logged in while publishing fails with "Wallet not connected".
+  const { isConnected, sessionClient, connectWallet, walletReady, address } =
+    useLensAuth();
+  const walletMissing = !!sessionClient && !isConnected;
   const [searchQuery, setSearchQuery] = useState("");
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [showAI, setShowAI] = useState(false);
@@ -289,6 +296,38 @@ const Navbar = ({ visible = true }) => {
                   title={`${t("search_placeholder")} (⌘K)`}
                 >
                   <Search className="w-5 h-5" />
+                </button>
+              )}
+
+              {/* Wallet status: green = can sign, red = reconnect needed */}
+              {sessionClient && (
+                <button
+                  onClick={walletMissing ? connectWallet : undefined}
+                  disabled={!walletMissing && !walletReady}
+                  className={`h-10 px-3 flex items-center gap-2 rounded-lg text-xs font-medium transition-colors duration-150 ${
+                    walletMissing
+                      ? "bg-red-500/15 border border-red-500/40 text-red-300 hover:bg-red-500/25 cursor-pointer"
+                      : "bg-slate-100 dark:bg-white/[0.03] text-slate-600 dark:text-white/50 cursor-default"
+                  }`}
+                  title={
+                    walletMissing
+                      ? t("wallet_reconnect_hint")
+                      : address || t("wallet_connected")
+                  }
+                >
+                  <Wallet className="w-4 h-4" />
+                  <span
+                    className={`w-2 h-2 rounded-full ${
+                      walletMissing ? "bg-red-500" : "bg-emerald-500"
+                    }`}
+                  />
+                  <span className="hidden md:inline">
+                    {walletMissing
+                      ? t("wallet_connect_action")
+                      : address
+                        ? `${address.slice(0, 6)}…${address.slice(-4)}`
+                        : t("wallet_connected")}
+                  </span>
                 </button>
               )}
 

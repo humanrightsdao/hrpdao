@@ -1,5 +1,5 @@
 import { useTranslation } from "react-i18next";
-import { Info, ExternalLink } from "lucide-react";
+import { Info, ExternalLink, Mail } from "lucide-react";
 
 // ─── Design tokens (aligned with DocsPage.jsx / VerificationPage.jsx) ──────
 // Same rationale as elsewhere in this app: no @tailwindcss/typography
@@ -11,6 +11,7 @@ const liCls = "text-parchmentDim text-sm leading-relaxed";
 const highlightBox =
   "mt-10 p-6 bg-verdigris/[0.06] rounded-2xl border border-verdigris/20";
 
+const CONTACT_EMAIL = "humanrightsdao@gmail.com";
 const DOSSIER_APP_URL = import.meta.env.VITE_DOSSIER_APP_URL || "http://localhost:5173";
 
 export default function AboutPage() {
@@ -67,10 +68,16 @@ export default function AboutPage() {
 
       <h2 className={headingCls}>7. {t("dao.about.contactTitle")}</h2>
       <p className={pCls}>{t("dao.about.contactDescription")}</p>
+      <a
+        href={`mailto:${CONTACT_EMAIL}`}
+        className="inline-flex items-center gap-2 mt-3 px-4 py-2.5 rounded-xl border border-verdigris/30 bg-verdigris/[0.06] font-mono text-sm text-verdigrisBright hover:bg-verdigris/10"
+      >
+        <Mail size={16} /> {CONTACT_EMAIL}
+      </a>
 
       <div className={highlightBox}>
         <p className="font-semibold text-parchment text-sm m-0">
-          {t("dao.about.subtitle")}
+          {t("dao.about.slogan")}
         </p>
       </div>
     </div>

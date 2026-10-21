@@ -1579,9 +1579,9 @@
     "about": {
       "title": "À propos de nous",
       "subtitle": "DAO — la couche de gouvernance de Human Rights Policy DAO",
-      "intro": "une organisation autonome décentralisée par laquelle la communauté gère la modération, les sanctions et les politiques de Dossier et de l'écosystème plus large — sans qu'une seule entreprise ou un back-office ne décide seul.",
+      "intro": "une organisation autonome décentralisée fondée sur l'idée du respect des droits humains fondamentaux — le principe que les droits naturels à la vie, à la liberté, à la propriété et à l'égalité appartiennent à chaque personne, quels que soient l'État, le territoire ou la nationalité. Par son intermédiaire, la communauté gouverne la modération, les sanctions et les politiques de Dossier et de tout l'écosystème — sans qu'une entreprise ou un back-office décide seul.",
       "missionTitle": "Notre mission",
-      "missionDescription": "Nous pensons que les décisions concernant la modération des signalements de violations des droits humains, les sanctions contre les comptes et l'utilisation des fonds communs devraient être prises de manière transparente et responsable — par la communauté, et non par une seule entreprise ou un back-office anonyme. La DAO déplace ces décisions on-chain, où chacun peut les vérifier.",
+      "missionDescription": "Donner aux personnes un ensemble unique de règles de coexistence pacifique — où le critère d'une violation est un préjudice réel aux droits d'autrui — ainsi que des outils pour documenter les violations, soutenir les victimes, diffuser la connaissance des droits humains et former des communautés fondées sur le consensus. Nous encourageons le règlement des différends devant les tribunaux, afin de réduire les conflits et le nombre de victimes.",
       "whatWeDoTitle": "Ce que fait la plateforme",
       "whatWeDoDescription": "La DAO combine plusieurs outils de gouvernance",
       "featureProposals": "Propositions et votes sur les changements de règles, les sanctions et les paramètres du protocole",
@@ -1591,15 +1591,16 @@
       "featureForum": "Un forum pour la discussion publique des propositions et des politiques",
       "featureAtticus": "Atticus, un conseiller IA en droit des droits humains",
       "decentralizedTitle": "Construit sur une infrastructure ouverte et décentralisée",
-      "decentralizedDescription": "Les propositions, votes, sanctions et mouvements de trésorerie sont enregistrés par des smart contracts (Governor, Treasury, HumanityGate, LocationRegistry) sur une blockchain publique, ce qui rend le processus vérifiable par tous. L'authentification du portefeuille est partagée avec Dossier (le même identifiant d'application Privy), de sorte qu'un seul compte fonctionne dans les deux applications.",
+      "decentralizedDescription": "Les propositions, votes, sanctions et mouvements de trésorerie sont enregistrés par des smart contracts (Governor, Treasury, HumanityGate, LocationRegistry) sur une blockchain publique, ce qui rend le processus vérifiable par tous. L'authentification du portefeuille est partagée avec Dossier (le même identifiant d'application Privy), de sorte qu'un seul compte fonctionne dans les deux applications. Le texte de la politique est stocké sur IPFS, et sa version en vigueur est ratifiée par la gouvernance on-chain.",
       "governanceTitle": "Comment les décisions sont prises",
       "governanceDescription": "Toute personne disposant des droits de gouvernance appropriés (SHIELD ou COUNCIL) peut soumettre une proposition ou voter. Les propositions — y compris les sanctions contre les comptes Dossier — font l'objet d'une discussion publique sur le forum et d'un vote, et le résultat est exécuté automatiquement on-chain, sans intervention manuelle.",
       "dossierTitle": "Relation avec Dossier",
       "dossierDescription": "Dossier est l'application où les gens publient et discutent des signalements de violations des droits humains liés à un lieu et une heure. La DAO est la couche de gouvernance de ce processus : elle examine les signalements sur le contenu de Dossier et décide des sanctions contre les comptes qui enfreignent les règles. Les deux applications partagent le même portefeuille/compte, mais peuvent fonctionner indépendamment l'une de l'autre.",
       "independenceTitle": "Indépendance",
-      "independenceDescription": "La DAO est une interface technique vers des smart contracts gouvernés par la communauté. Ce n'est ni un organisme gouvernemental, ni une agence chargée de l'application de la loi, ni un substitut aux services juridiques ou humanitaires — voir les Conditions d'utilisation pour plus de détails sur ce que la plateforme est et n'est pas.",
+      "independenceDescription": "La DAO est une interface technique vers des smart contracts gouvernés par la communauté. Ce n'est ni un organisme gouvernemental, ni une agence chargée de l'application de la loi, ni un substitut aux services juridiques ou humanitaires — voir les Conditions d'utilisation pour plus de détails sur ce que la plateforme est et n'est pas. Le projet ne s'oppose pas à l'État — il constitue un outil social supplémentaire.",
       "contactTitle": "Nous contacter",
-      "contactDescription": "Les questions, retours ou propositions de partenariat peuvent être envoyés via le forum de l'application ou les canaux de gouvernance et de communauté de la DAO."
+      "contactDescription": "Questions, retours ou propositions de partenariat — écrivez à notre adresse e-mail ou utilisez le forum de l'application et les canaux communautaires de la DAO.",
+      "slogan": "Rejoignez le camp des droits humains !"
     },
     "privacy": {
       "title": "Politique de confidentialité",

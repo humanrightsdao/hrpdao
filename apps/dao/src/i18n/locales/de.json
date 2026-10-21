@@ -1579,9 +1579,9 @@
     "about": {
       "title": "Über uns",
       "subtitle": "DAO — die Governance-Ebene der Human Rights Policy DAO",
-      "intro": "eine dezentrale autonome Organisation, über die die Community Moderation, Sanktionen und Richtlinien für Dossier und das breitere Ökosystem verwaltet — ohne dass ein einzelnes Unternehmen oder Backoffice allein entscheidet.",
+      "intro": "eine dezentrale autonome Organisation, die auf der Idee der Wahrung grundlegender Menschenrechte beruht — dem Grundsatz, dass die natürlichen Rechte auf Leben, Freiheit, Eigentum und Gleichheit jedem Menschen zustehen, unabhängig von Staat, Territorium oder Staatsbürgerschaft. Über sie steuert die Gemeinschaft Moderation, Sanktionen und Richtlinien für Dossier und das gesamte Ökosystem — ohne dass ein einzelnes Unternehmen oder Backoffice allein entscheidet.",
       "missionTitle": "Unsere Mission",
-      "missionDescription": "Wir glauben, dass Entscheidungen über die Moderation von Menschenrechtsberichten, Sanktionen gegen Konten und die Verwendung gemeinsamer Mittel transparent und rechenschaftspflichtig getroffen werden sollten — von der Community, nicht von einem einzelnen Unternehmen oder einem anonymen Backoffice. Die DAO verlagert diese Entscheidungen on-chain, wo sie jeder überprüfen kann.",
+      "missionDescription": "Den Menschen ein einheitliches Regelwerk für friedliches Zusammenleben zu geben — bei dem der Maßstab für einen Verstoß der tatsächliche Schaden für die Rechte eines anderen Menschen ist — sowie Werkzeuge, um Verstöße zu dokumentieren, Opfer zu unterstützen, Wissen über Menschenrechte zu verbreiten und konsensbasierte Gemeinschaften zu bilden. Wir fördern die Beilegung von Streitigkeiten vor Gericht, um Konflikte und Opferzahlen zu verringern.",
       "whatWeDoTitle": "Was die Plattform leistet",
       "whatWeDoDescription": "Die DAO vereint mehrere Governance-Werkzeuge",
       "featureProposals": "Vorschläge und Abstimmungen über Regeländerungen, Sanktionen und Protokollparameter",
@@ -1591,15 +1591,16 @@
       "featureForum": "Ein Forum für öffentliche Diskussionen über Vorschläge und Richtlinien",
       "featureAtticus": "Atticus, einen KI-Berater für Menschenrechtsfragen",
       "decentralizedTitle": "Aufgebaut auf offener, dezentraler Infrastruktur",
-      "decentralizedDescription": "Vorschläge, Stimmen, Sanktionen und Bewegungen der Kasse werden von Smart Contracts (Governor, Treasury, HumanityGate, LocationRegistry) auf einer öffentlichen Blockchain erfasst, sodass der Prozess für jeden überprüfbar ist. Die Wallet-Authentifizierung wird mit Dossier geteilt (dieselbe Privy App ID), sodass ein einziges Konto in beiden Apps funktioniert.",
+      "decentralizedDescription": "Vorschläge, Stimmen, Sanktionen und Bewegungen der Kasse werden von Smart Contracts (Governor, Treasury, HumanityGate, LocationRegistry) auf einer öffentlichen Blockchain erfasst, sodass der Prozess für jeden überprüfbar ist. Die Wallet-Authentifizierung wird mit Dossier geteilt (dieselbe Privy App ID), sodass ein einziges Konto in beiden Apps funktioniert. Der Richtlinientext wird auf IPFS gespeichert, und seine aktuelle Version wird durch die On-Chain-Governance ratifiziert.",
       "governanceTitle": "Wie Entscheidungen getroffen werden",
       "governanceDescription": "Jeder mit den entsprechenden Governance-Rechten (SHIELD oder COUNCIL) kann einen Vorschlag einreichen oder abstimmen. Vorschläge — einschließlich Sanktionen gegen Dossier-Konten — durchlaufen eine öffentliche Diskussion im Forum und eine Abstimmung, und das Ergebnis wird automatisch on-chain ausgeführt, ohne manuellen Eingriff.",
       "dossierTitle": "Beziehung zu Dossier",
       "dossierDescription": "Dossier ist die App, in der Menschen Berichte über Menschenrechtsverletzungen veröffentlichen und diskutieren, die an einen Ort und eine Zeit gebunden sind. Die DAO ist die Governance-Ebene für diesen Prozess: Sie prüft Meldungen zu Dossier-Inhalten und entscheidet über Sanktionen gegen Konten, die gegen die Regeln verstoßen. Beide Apps teilen sich dieselbe Wallet/dasselbe Konto, können aber unabhängig voneinander betrieben werden.",
       "independenceTitle": "Unabhängigkeit",
-      "independenceDescription": "Die DAO ist eine technische Schnittstelle zu community-gesteuerten Smart Contracts. Sie ist keine Regierungsbehörde, keine Strafverfolgungsbehörde und kein Ersatz für rechtliche oder humanitäre Dienste — Details dazu, was die Plattform ist und was nicht, finden Sie in den Nutzungsbedingungen.",
+      "independenceDescription": "Die DAO ist eine technische Schnittstelle zu community-gesteuerten Smart Contracts. Sie ist keine Regierungsbehörde, keine Strafverfolgungsbehörde und kein Ersatz für rechtliche oder humanitäre Dienste — Details dazu, was die Plattform ist und was nicht, finden Sie in den Nutzungsbedingungen. Das Projekt stellt sich nicht gegen den Staat — es ist ein zusätzliches soziales Werkzeug.",
       "contactTitle": "Kontaktieren Sie uns",
-      "contactDescription": "Fragen, Feedback oder Partnerschaftsvorschläge können über das Forum der App oder die Governance- und Community-Kanäle der DAO gesendet werden."
+      "contactDescription": "Fragen, Feedback oder Kooperationsvorschläge — schreiben Sie an unsere E-Mail-Adresse oder nutzen Sie das Forum der App und die Community-Kanäle der DAO.",
+      "slogan": "Schließe dich der Seite der Menschenrechte an!"
     },
     "privacy": {
       "title": "Datenschutzrichtlinie",
