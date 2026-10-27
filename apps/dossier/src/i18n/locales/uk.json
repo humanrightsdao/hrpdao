@@ -662,6 +662,8 @@
   "publish_test_note": "Опублікувати тестову нотатку",
   "also_posted_to_nostr": "Також опубліковано в Nostr",
   "nostr_crosspost_skipped": "Крос-постинг у Nostr пропущено",
+  "publish_status_published": "Опубліковано",
+  "publish_status_skipped": "Пропущено",
   "message_on_nostr": "Написати в Чат",
   "nostr_chat": "Чат",
   "spam_wait_for_reply": "Ви вже надіслали перше повідомлення. Зачекайте на відповідь співрозмовника, перш ніж писати знову.",

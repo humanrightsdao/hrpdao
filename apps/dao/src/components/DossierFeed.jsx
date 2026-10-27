@@ -10,7 +10,7 @@
 // through anyway. Clicking a post (or its "open" icon) opens it on
 // dossier itself, in a new tab.
 import { useEffect, useState, useCallback } from "react";
-import { MessageCircle, ExternalLink, Globe } from "lucide-react";
+import { MessageCircle, ExternalLink, Globe, Image as ImageIcon, Video as VideoIcon, X, FileText } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { truncAddr } from "../lib/format";
 import { fetchWorldPosts } from "../lib/dossierFeed";
@@ -148,7 +148,6 @@ function PostRow({ post }) {
     window.open(`${DOSSIER_APP_URL}/post/${post.id}`, "_blank", "noreferrer");
 
   const initials = (post.author.name || "?").slice(0, 2).toUpperCase();
-  const image = post.media.find((m) => m.type === "image");
   const countryName = getCountryName(post.countryCode, i18n.language);
 
   return (
@@ -209,13 +208,7 @@ function PostRow({ post }) {
           {post.content || t("dao.communityFeed.noText")}
         </p>
 
-        {image && (
-          <img
-            src={image.url}
-            alt=""
-            className="mt-2 max-h-56 rounded-xl border border-hairline object-cover"
-          />
-        )}
+        <PostMedia media={post.media} />
 
         <div className="flex items-center gap-4 mt-3 text-parchmentDim">
           <span className="flex items-center gap-1.5 text-xs">
@@ -228,6 +221,131 @@ function PostRow({ post }) {
           </span>
         </div>
       </div>
+    </div>
+  );
+}
+
+// ── Media ────────────────────────────────────────────────────────────
+// Compact, dossier-style media: every image/video of a post is shown in a
+// fixed-height tile (object-contain, so nothing is cropped and vertical
+// Reels/Shorts stay fully visible on a dark backdrop). Anyone who wants a
+// closer look expands it to full screen (click an image; videos use the
+// player's own fullscreen button). Everything here stops propagation so it doesn't
+// trigger the row's "open on dossier" click.
+function PostMedia({ media }) {
+  const [lightbox, setLightbox] = useState(null);
+  const items = (media || []).filter((m) => m.url);
+  if (items.length === 0) return null;
+
+  const visual = items.filter((m) => m.type === "image" || m.type === "video");
+  const files = items.filter((m) => m.type === "file");
+
+  return (
+    <div className="mt-3" onClick={(e) => e.stopPropagation()}>
+      {visual.length > 0 && (
+        <div className="rounded-xl overflow-hidden border border-hairline">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-0.5 bg-white/[0.04]">
+            {visual.map((item, i) => (
+              <MediaItem
+                key={`${item.url}-${i}`}
+                item={item}
+                onOpen={() => setLightbox(item)}
+              />
+            ))}
+          </div>
+        </div>
+      )}
+
+      {files.map((f, i) => (
+        <a
+          key={`${f.url}-${i}`}
+          href={f.url}
+          target="_blank"
+          rel="noreferrer"
+          className="mt-2 flex items-center gap-2 px-3 py-2 rounded-lg border border-hairline
+            text-xs text-parchmentDim hover:text-verdigrisBright hover:border-verdigris transition-colors"
+        >
+          <FileText size={14} />
+          <span className="truncate">{f.url.split("/").pop()}</span>
+        </a>
+      ))}
+
+      {lightbox && <Lightbox item={lightbox} onClose={() => setLightbox(null)} />}
+    </div>
+  );
+}
+
+function MediaItem({ item, onOpen }) {
+  return (
+    <div className="relative h-[180px] bg-black/40">
+      {item.type === "image" ? (
+        <img
+          src={item.url}
+          alt=""
+          loading="lazy"
+          onClick={onOpen}
+          className="w-full h-full object-contain cursor-zoom-in hover:opacity-95 transition-opacity"
+        />
+      ) : (
+        <video
+          src={item.url}
+          poster={item.cover || undefined}
+          controls
+          playsInline
+          preload="metadata"
+          className="w-full h-full object-contain bg-black"
+        >
+          {item.mimeType && <source src={item.url} type={item.mimeType} />}
+        </video>
+      )}
+      {/* media-type badge (top-right), same as dossier's PostCard.
+          Videos expand via the player's own fullscreen button. */}
+      <div
+        className="absolute top-2 right-2 pointer-events-none bg-[#000d1f]/80 border border-white/10
+          text-white/50 text-[11px] px-2 py-1 rounded flex items-center gap-1"
+      >
+        {item.type === "image" ? (
+          <ImageIcon className="w-3 h-3" />
+        ) : (
+          <VideoIcon className="w-3 h-3" />
+        )}
+        {item.type === "image" ? "Image" : "Video"}
+      </div>
+    </div>
+  );
+}
+
+function Lightbox({ item, onClose }) {
+  useEffect(() => {
+    const onKey = (e) => e.key === "Escape" && onClose();
+    window.addEventListener("keydown", onKey);
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      document.body.style.overflow = prev;
+    };
+  }, [onClose]);
+
+  return (
+    <div
+      className="fixed inset-0 z-[100] bg-black/90 flex items-center justify-center p-4"
+      onClick={onClose}
+    >
+      <button
+        type="button"
+        onClick={onClose}
+        aria-label="Close"
+        className="absolute top-4 right-4 p-2 rounded-full bg-white/10 text-white hover:bg-white/20"
+      >
+        <X size={20} />
+      </button>
+      <img
+        src={item.url}
+        alt=""
+        className="max-w-[95vw] max-h-[92vh] object-contain"
+        onClick={(e) => e.stopPropagation()}
+      />
     </div>
   );
 }

@@ -245,7 +245,7 @@ class AIService {
       lastResponseTime: this.lastResponseTime,
       conversationLength: this.conversationHistory.length,
       status: this.isInitialized ? "ready" : "not_initialized",
-      model: "gemini-3-flash-preview",
+      model: "gemini-3.5-flash-lite",
       service: "Google Gemini AI (via secure backend, streaming)",
       maxTokens: 8000,
       note: "AI Atticus - your human rights protection assistant",

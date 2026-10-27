@@ -654,6 +654,8 @@
   "publish_test_note": "Publicar nota de prueba",
   "also_posted_to_nostr": "También publicado en Nostr",
   "nostr_crosspost_skipped": "Publicación cruzada en Nostr omitida",
+  "publish_status_published": "Publicado",
+  "publish_status_skipped": "Omitido",
   "message_on_nostr": "Escribir en Chat",
   "nostr_chat": "Chat",
   "spam_wait_for_reply": "Ya has enviado un primer mensaje. Espera la respuesta de tu interlocutor antes de escribir de nuevo.",

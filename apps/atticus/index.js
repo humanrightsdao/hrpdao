@@ -21,7 +21,10 @@ dotenv.config();
 const app = express();
 const PORT = process.env.PORT || 3005;
 const API_KEY = process.env.GEMINI_API_KEY;
-const MODEL = "gemini-3-flash-preview";
+// CHANGED: was "gemini-3-flash-preview" (free tier ~20 requests/day, 5/min).
+// Flash-Lite has a much higher free quota (~500/day, 15/min). Same model as
+// the production Worker (dossier/worker/index.js).
+const MODEL = "gemini-3.5-flash-lite";
 
 // ── AI moderation settings (see moderation.js and ../AI_MODERATION.md) ────
 // A SEPARATE Gemini key/project for moderation is recommended, so a burst of

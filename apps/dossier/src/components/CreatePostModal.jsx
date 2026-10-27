@@ -12,6 +12,8 @@ import {
   Globe,
   Upload,
   User,
+  CheckCircle2,
+  MinusCircle,
 } from "lucide-react";
 
 import { useCountry } from "../hooks/useCountry";
@@ -31,6 +33,26 @@ import { checkPostRateLimit } from "../utils/postRateLimit";
 // platform, not a microblog), well above Threads/Mastodon's ~500, but
 // still short of turning the feed into a blog.
 const MAX_POST_LENGTH = 3000;
+
+// Status chip used in the publish-result row: [icon] Network · status.
+const PublishStatusChip = ({ label, text, ok }) => (
+  <span
+    className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md border text-[13px] leading-none ${
+      ok
+        ? "bg-emerald-500/[0.08] border-emerald-500/25 text-emerald-700 dark:text-emerald-400/90"
+        : "bg-slate-500/[0.06] border-slate-400/25 text-slate-600 dark:text-white/45"
+    }`}
+  >
+    {ok ? (
+      <CheckCircle2 className="w-3.5 h-3.5" />
+    ) : (
+      <MinusCircle className="w-3.5 h-3.5" />
+    )}
+    <span className="font-medium">{label}</span>
+    <span className="opacity-70">·</span>
+    <span>{text}</span>
+  </span>
+);
 
 const CreatePostModal = ({ onClose }) => {
   const { t, i18n } = useTranslation();
@@ -669,42 +691,36 @@ const CreatePostModal = ({ onClose }) => {
           className="px-4 py-3.5 border-t border-slate-300 dark:border-white/[0.07]
           flex flex-col gap-2"
         >
-          {/* Success */}
+          {/* CHANGED: publish result — one compact row with a chip per
+              network (Lens / Nostr) instead of two separate banners that
+              differed in font size, colour and wording. Both chips share
+              the same size, type and success colour; a skipped Nostr
+              cross-post is shown in a muted neutral tone (informational
+              only — it never blocks or reverts the Lens post). The Nostr
+              chip is omitted if no cross-post was attempted. */}
           {submitSuccess && (
             <div
-              className="flex items-center gap-2 px-3 py-2
-              bg-emerald-500/[0.08] border border-emerald-500/20 rounded-lg"
+              role="status"
+              className="flex items-center gap-2 flex-wrap px-3 py-2 rounded-lg
+                border border-slate-300 dark:border-white/[0.08]
+                bg-slate-50 dark:bg-white/[0.03]"
             >
-              <span className="text-emerald-600 dark:text-emerald-400/80 text-[16px]">
-                ✓ {t("post_published") || "Post published!"}
-              </span>
-            </div>
-          )}
-
-          {/* ADDED: Nostr cross-post status — informational only, never
-              blocks the flow above; shown only when we actually
-              attempted a cross-post (nostrCrossPostStatus is null if
-              createLensPost never got that far, e.g. Nostr identity
-              derivation itself failed before any relay was tried). */}
-          {submitSuccess && nostrCrossPostStatus && (
-            <div
-              className={`flex items-center gap-2 px-3 py-2 rounded-lg border ${
-                nostrCrossPostStatus.success
-                  ? "bg-purple-500/[0.08] border-purple-500/20"
-                  : "bg-slate-500/[0.06] border-slate-500/15"
-              }`}
-            >
-              <span
-                className={`text-[13px] ${
-                  nostrCrossPostStatus.success
-                    ? "text-purple-600 dark:text-purple-400/80"
-                    : "text-slate-500 dark:text-white/40"
-                }`}
-              >
-                {nostrCrossPostStatus.success
-                  ? `✓ ${t("also_posted_to_nostr") || "Also posted to Nostr"}`
-                  : `${t("nostr_crosspost_skipped") || "Nostr cross-post skipped"}`}
-              </span>
+              <PublishStatusChip
+                label="Lens"
+                ok
+                text={t("publish_status_published") || "Published"}
+              />
+              {nostrCrossPostStatus && (
+                <PublishStatusChip
+                  label="Nostr"
+                  ok={!!nostrCrossPostStatus.success}
+                  text={
+                    nostrCrossPostStatus.success
+                      ? t("publish_status_published") || "Published"
+                      : t("publish_status_skipped") || "Skipped"
+                  }
+                />
+              )}
             </div>
           )}
 

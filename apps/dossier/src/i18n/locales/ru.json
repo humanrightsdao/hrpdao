@@ -662,6 +662,8 @@
   "publish_test_note": "Опубликовать тестовую заметку",
   "also_posted_to_nostr": "Также опубликовано в Nostr",
   "nostr_crosspost_skipped": "Крос-постинг в Nostr пропущен",
+  "publish_status_published": "Опубликовано",
+  "publish_status_skipped": "Пропущено",
   "message_on_nostr": "Написать в Чат",
   "nostr_chat": "Чат",
   "spam_wait_for_reply": "Вы уже отправили первое сообщение. Дождитесь ответа собеседника, прежде чем писать снова.",

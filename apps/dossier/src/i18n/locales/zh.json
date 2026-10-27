@@ -662,6 +662,8 @@
   "publish_test_note": "发布测试笔记",
   "also_posted_to_nostr": "已同时发布到Nostr",
   "nostr_crosspost_skipped": "跳过Nostr交叉发布",
+  "publish_status_published": "已发布",
+  "publish_status_skipped": "已跳过",
   "message_on_nostr": "在Nostr上聊天",
   "nostr_chat": "聊天",
   "spam_wait_for_reply": "您已发送第一条消息，请等待对方回复后再发送。",

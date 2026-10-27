@@ -509,15 +509,16 @@ const SupportModal = ({ t, onClose }) => {
     return () => document.removeEventListener("keydown", h);
   }, [onClose]);
 
-  // NOTE: addresses intentionally left blank before the public GitHub release.
-  // Fill in real donation addresses here once they're finalized, then remove
-  // this comment.
+  // Donation (receive) addresses. Public by nature — safe to keep in the repo.
+  // ETH and USDT (ERC-20) share one address: both live on the EVM network.
+  // GRAM (formerly TON): address from Wallet in Telegram.
+  const EVM_ADDRESS = "0x56442570f9885D66A7c212096ec4844cF5270f1a";
   const wallets = [
     {
       type: "ethereum",
       label: "ETH",
       name: "Ethereum",
-      address: "",
+      address: EVM_ADDRESS,
       color: "#818cf8",
       bg: "rgba(129,140,248,0.1)",
       bd: "rgba(129,140,248,0.2)",
@@ -526,16 +527,18 @@ const SupportModal = ({ t, onClose }) => {
       type: "bitcoin",
       label: "BTC",
       name: "Bitcoin",
-      address: "",
+      address: "bc1qf0c6wpp9t9k7xsxhqrgqqd5d8ezwrm0v5wg93e",
       color: "#fb923c",
       bg: "rgba(251,146,60,0.1)",
       bd: "rgba(251,146,60,0.2)",
     },
     {
       type: "ton",
-      label: "TON",
-      name: "TON",
-      address: "",
+      // Toncoin was renamed to Gram (ticker GRAM) on 2026-06-15; the network
+      // and addresses are unchanged. `type` stays "ton" (internal key only).
+      label: "GRAM",
+      name: "Gram (TON)",
+      address: "UQCFS2TQBEg7v8xMnNpkXaGIS9gEOG3NZsNVJbfccqjajr1j",
       color: "#38bdf8",
       bg: "rgba(56,189,248,0.1)",
       bd: "rgba(56,189,248,0.2)",
@@ -544,7 +547,7 @@ const SupportModal = ({ t, onClose }) => {
       type: "solana",
       label: "SOL",
       name: "Solana",
-      address: "",
+      address: "HvKmPjqiUL1jEdjCRUgDKQiKnDfD8AHWD7k7UwgY4KJi",
       color: "#c084fc",
       bg: "rgba(192,132,252,0.1)",
       bd: "rgba(192,132,252,0.2)",
@@ -553,7 +556,7 @@ const SupportModal = ({ t, onClose }) => {
       type: "tether",
       label: "USDT",
       name: "Tether ERC-20",
-      address: "",
+      address: EVM_ADDRESS,
       color: "#34d399",
       bg: "rgba(52,211,153,0.1)",
       bd: "rgba(52,211,153,0.2)",

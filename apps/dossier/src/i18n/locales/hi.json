@@ -662,6 +662,8 @@
   "publish_test_note": "परीक्षण नोट प्रकाशित करें",
   "also_posted_to_nostr": "Nostr पर भी प्रकाशित किया गया",
   "nostr_crosspost_skipped": "Nostr में क्रॉस-पोस्टिंग छोड़ी गई",
+  "publish_status_published": "प्रकाशित",
+  "publish_status_skipped": "छोड़ा गया",
   "message_on_nostr": "चैट में लिखें",
   "nostr_chat": "चैट",
   "spam_wait_for_reply": "आप पहले ही पहला संदेश भेज चुके हैं। कृपया दोबारा लिखने से पहले वार्ताकार की प्रतिक्रिया की प्रतीक्षा करें।",

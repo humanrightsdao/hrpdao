@@ -662,6 +662,8 @@
   "publish_test_note": "Publish test note",
   "also_posted_to_nostr": "Also posted to Nostr",
   "nostr_crosspost_skipped": "Nostr cross-posting skipped",
+  "publish_status_published": "Published",
+  "publish_status_skipped": "Skipped",
   "message_on_nostr": "Write in Chat",
   "nostr_chat": "Chat",
   "spam_wait_for_reply": "You already sent a first message. Wait for recipient's reply before writing again.",

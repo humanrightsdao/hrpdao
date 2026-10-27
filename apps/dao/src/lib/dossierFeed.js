@@ -36,28 +36,50 @@ function resolveLensPicture(picture) {
   return picture;
 }
 
+// CHANGED: besides the url, keep the mime type and the video cover
+// (poster) so the feed can render videos properly, and classify
+// attachments by __typename AND mime type — a video attached to a post
+// (MediaVideo) used to fall into the "file" bucket and was never shown.
+function classifyAttachment(a) {
+  const name = (a.__typename || "").toLowerCase();
+  const mime = (a.type || "").toLowerCase();
+  if (name.includes("video") || mime.startsWith("video/")) return "video";
+  if (name.includes("image") || mime.startsWith("image/")) return "image";
+  return "file";
+}
+
 function extractMediaUrls(metadata) {
   if (!metadata) return [];
   const urls = [];
-  if (metadata.__typename === "ImageMetadata" && metadata.image) {
-    urls.push({ type: "image", url: resolveLensPicture(metadata.image.item) });
+  if (metadata.__typename === "ImageMetadata" && metadata.image?.item) {
+    urls.push({
+      type: "image",
+      url: resolveLensPicture(metadata.image.item),
+      mimeType: metadata.image.type,
+    });
   }
-  if (metadata.__typename === "VideoMetadata" && metadata.video) {
-    urls.push({ type: "video", url: resolveLensPicture(metadata.video.item) });
+  if (metadata.__typename === "VideoMetadata" && metadata.video?.item) {
+    urls.push({
+      type: "video",
+      url: resolveLensPicture(metadata.video.item),
+      mimeType: metadata.video.type,
+      cover: resolveLensPicture(metadata.video.cover),
+    });
   }
   if (metadata.attachments) {
     metadata.attachments.forEach((a) => {
       if (a.item) {
+        const type = classifyAttachment(a);
         urls.push({
-          type: a.__typename?.toLowerCase().includes("image")
-            ? "image"
-            : "file",
+          type,
           url: resolveLensPicture(a.item),
+          mimeType: a.type,
+          ...(type === "video" ? { cover: resolveLensPicture(a.cover) } : {}),
         });
       }
     });
   }
-  return urls;
+  return urls.filter((m) => m.url);
 }
 
 function normalizeLensPost(lensPost) {

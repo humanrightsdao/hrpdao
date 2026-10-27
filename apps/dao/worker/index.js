@@ -25,7 +25,11 @@ import {
   PROMPT_VERSION,
 } from "./moderation.js";
 
-const MODEL = "gemini-3-flash-preview";
+// CHANGED: was "gemini-3-flash-preview" (free tier: ~20 requests/day, 5/min —
+// chat + moderation exhausted it, causing the 429 "free-tier limit" errors).
+// Flash-Lite has a much higher free quota (~500/day, 15/min). One model for
+// everything for now; moderation can still be overridden via MODERATION_MODEL.
+const MODEL = "gemini-3.5-flash-lite";
 
 const SYSTEM_PROMPT_TEMPLATE = (
   historyContext,

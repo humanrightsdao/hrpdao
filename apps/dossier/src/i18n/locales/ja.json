@@ -662,6 +662,8 @@
   "publish_test_note": "テストノートを公開",
   "also_posted_to_nostr": "Nostrにも公開されました",
   "nostr_crosspost_skipped": "Nostrクロスポストはスキップされました",
+  "publish_status_published": "公開済み",
+  "publish_status_skipped": "スキップ",
   "message_on_nostr": "チャットに書き込む",
   "nostr_chat": "チャット",
   "spam_wait_for_reply": "最初のメッセージは既に送信済みです。相手からの返信を待ってから再度メッセージを送信してください。",

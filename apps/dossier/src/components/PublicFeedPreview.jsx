@@ -15,6 +15,7 @@ import React, { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import useLensPosts from "../hooks/useLensPosts";
 import { useCountry } from "../hooks/useCountry";
+import { Image as ImageIcon, Video as VideoIcon, X } from "lucide-react";
 
 const formatDate = (dateString, t) => {
   if (!dateString) return "";
@@ -29,6 +30,101 @@ const formatDate = (dateString, t) => {
   if (diffHours < 24) return `${diffHours} ${t("hours_ago") || "h ago"}`;
   if (diffDays < 7) return `${diffDays} ${t("days_ago") || "d ago"}`;
   return date.toLocaleDateString();
+};
+
+// ADDED: the preview used to render only media_urls[0], and only when it
+// was an image, cropped with object-cover — so videos never appeared and
+// images looked zoomed-in. Now every image/video is shown in a compact
+// fixed-height tile (object-contain = nothing cropped, vertical Reels /
+// Shorts stay fully visible) and can be expanded to full screen, same as
+// PostCard in the main feed (type badge top-right; images open a
+// lightbox, videos use the player's own fullscreen button).
+const PreviewMedia = ({ urls = [], types = [] }) => {
+  const [open, setOpen] = useState(null);
+  const items = urls
+    .map((url, i) => ({ url, type: types[i] }))
+    .filter((m) => m.url && (m.type === "image" || m.type === "video"));
+
+  useEffect(() => {
+    if (!open) return undefined;
+    const onKey = (e) => e.key === "Escape" && setOpen(null);
+    window.addEventListener("keydown", onKey);
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      document.body.style.overflow = prev;
+    };
+  }, [open]);
+
+  if (items.length === 0) return null;
+
+  return (
+    <>
+      <div className="mt-2 rounded-lg overflow-hidden border border-slate-300 dark:border-white/[0.06]">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-0.5 bg-slate-100 dark:bg-white/[0.04]">
+          {items.map((item, i) => (
+            <div
+              key={`${item.url}-${i}`}
+              className="relative h-[140px] bg-slate-200 dark:bg-black/40"
+            >
+              {item.type === "image" ? (
+                <img
+                  src={item.url}
+                  alt=""
+                  loading="lazy"
+                  onClick={() => setOpen(item)}
+                  className="w-full h-full object-contain cursor-zoom-in"
+                />
+              ) : (
+                <video
+                  src={item.url}
+                  controls
+                  playsInline
+                  preload="metadata"
+                  className="w-full h-full object-contain bg-black"
+                />
+              )}
+              <div
+                className="absolute top-1.5 right-1.5 pointer-events-none bg-white/80 dark:bg-[#000d1f]/80
+                  border border-slate-300 dark:border-white/[0.1] text-slate-700 dark:text-white/50
+                  text-[11px] px-2 py-1 rounded flex items-center gap-1"
+              >
+                {item.type === "image" ? (
+                  <ImageIcon className="w-3 h-3" />
+                ) : (
+                  <VideoIcon className="w-3 h-3" />
+                )}
+                {item.type === "image" ? "Image" : "Video"}
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {open && (
+        <div
+          className="fixed inset-0 z-[100] bg-black/90 flex items-center justify-center p-4"
+          onClick={() => setOpen(null)}
+        >
+          <button
+            type="button"
+            onClick={() => setOpen(null)}
+            aria-label="Close"
+            className="absolute top-4 right-4 p-2 rounded-full bg-white/10 text-white hover:bg-white/20"
+          >
+            <X className="w-5 h-5" />
+          </button>
+          <img
+            src={open.url}
+            alt=""
+            className="max-w-[95vw] max-h-[92vh] object-contain"
+            onClick={(e) => e.stopPropagation()}
+          />
+        </div>
+      )}
+    </>
+  );
 };
 
 const PublicFeedPreview = () => {
@@ -169,8 +265,6 @@ const PublicFeedPreview = () => {
             const handle = post.author?.unique_name
               ? `@${post.author.unique_name}`
               : null;
-            const previewMedia = post.media_urls?.[0] || null;
-            const previewMediaType = post.media_types?.[0] || null;
 
             return (
               <div key={post.id} className="px-4 py-3">
@@ -226,13 +320,10 @@ const PublicFeedPreview = () => {
                   </p>
                 )}
 
-                {previewMedia && previewMediaType === "image" && (
-                  <img
-                    src={previewMedia}
-                    alt=""
-                    className="mt-2 w-full h-[120px] object-cover rounded-lg bg-slate-200 dark:bg-black/40"
-                  />
-                )}
+                <PreviewMedia
+                  urls={post.media_urls}
+                  types={post.media_types}
+                />
               </div>
             );
           })}

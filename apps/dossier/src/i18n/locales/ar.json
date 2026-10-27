@@ -662,6 +662,8 @@
   "publish_test_note": "نشر ملاحظة تجريبية",
   "also_posted_to_nostr": "تم النشر أيضاً في Nostr",
   "nostr_crosspost_skipped": "تم تخطي النشر المتقاطع في Nostr",
+  "publish_status_published": "تم النشر",
+  "publish_status_skipped": "تم التخطي",
   "message_on_nostr": "كتابة في الدردشة",
   "nostr_chat": "الدردشة",
   "spam_wait_for_reply": "لقد أرسلت بالفعل رسالتك الأولى. انتظر رد المحاور قبل الكتابة مرة أخرى.",
