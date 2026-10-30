@@ -30,6 +30,8 @@ import {
   fetchShieldTotalSupply,
 } from "../lib/moderationCheck";
 import { getSeverityInfo, VIOLATION_CATEGORIES } from "../config/violationTypes";
+import useMapOverlays from "../hooks/useMapOverlays";
+import MapLayerControls from "./MapLayerControls";
 import {
   getViewportH3Cells,
   h3CellsToLeafletPolygons,
@@ -71,12 +73,14 @@ export default function ViolationsMap() {
   const [showH3Grid, setShowH3Grid] = useState(false);
   const [hexLevel, setHexLevel] = useState(3);
   const [selectedH3Cell, setSelectedH3Cell] = useState(null);
+  const [showLive, setShowLive] = useState(true);
+  const [showDangerZones, setShowDangerZones] = useState(true);
+  const [mapVersion, setMapVersion] = useState(0);
   const h3Resolution = LEVEL_RESOLUTIONS[hexLevel];
 
   const mapRef = useRef(null);
   const mapContainerRef = useRef(null);
   const markersRef = useRef([]);
-  const mapCounterRef = useRef(null);
   const h3LayerRef = useRef(null);
   const renderH3GridRef = useRef(() => {});
 
@@ -182,45 +186,18 @@ export default function ViolationsMap() {
       mapRef.current.panInsideBounds(bounds, { animate: false });
     });
 
-    // Counter control — clicking it opens dossier's own dedicated
-    // violations map in a new tab (this app has no such page of its own).
-    const CounterControl = L.Control.extend({
-      onAdd: function () {
-        const container = L.DomUtil.create(
-          "div",
-          "leaflet-bar leaflet-control leaflet-control-custom",
-        );
-        Object.assign(container.style, {
-          backgroundColor: "#12161c",
-          color: "#F4F2ED",
-          padding: "6px 10px",
-          borderRadius: "6px",
-          boxShadow: "0 1px 5px rgba(0,0,0,0.4)",
-          cursor: "pointer",
-          fontSize: "12px",
-          fontWeight: "500",
-          display: "flex",
-          alignItems: "center",
-          gap: "6px",
-        });
-        container.innerHTML = `<span>${t("dao.violationsMap.violationsOnMap", { count: violations.length })}</span>`;
-        container.onclick = () => {
-          window.open(`${DOSSIER_APP_URL}/violations-map`, "_blank", "noreferrer");
-        };
-        mapCounterRef.current = container;
-        return container;
-      },
-    });
-    new CounterControl({ position: "bottomleft" }).addTo(mapRef.current);
+    // Tell the overlay hook a map now exists (Live events, danger zones).
+    setMapVersion((v) => v + 1);
 
     if (showH3Grid) setTimeout(() => renderH3GridRef.current(), 50);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [violations.length]);
+  }, []);
 
   const updateMapMarkers = useCallback(() => {
-    if (!mapRef.current || !violations.length) return;
+    if (!mapRef.current) return;
     markersRef.current.forEach((m) => m.remove());
     markersRef.current = [];
+    if (!violations.length) return;
 
     violations.forEach((violation) => {
       if (!violation.latitude || !violation.longitude) return;
@@ -246,11 +223,21 @@ export default function ViolationsMap() {
       markersRef.current.push(marker);
     });
 
-    if (mapCounterRef.current) {
-      mapCounterRef.current.querySelector("span").textContent =
-        t("dao.violationsMap.violationsOnMap", { count: violations.length });
-    }
   }, [violations]);
+
+  // Danger zones + Live (alert pins and GDACS / ACLED events). The events
+  // come from dossier's /api/events, so both apps show the same data.
+  const { liveCount } = useMapOverlays({
+    mapRef,
+    mapVersion,
+    violations,
+    showLive,
+    showDangerZones,
+    eventsUrl: `${DOSSIER_APP_URL}/api/events`,
+    onViewDetails: (id) =>
+      window.open(`${DOSSIER_APP_URL}/violations/${id}`, "_blank", "noreferrer"),
+    getViolationTypeLabel: (v) => getViolationTypeLabel(v, t),
+  });
 
   const renderH3Grid = useCallback(() => {
     if (!mapRef.current) return;
@@ -429,6 +416,14 @@ export default function ViolationsMap() {
         `}</style>
 
         <div ref={mapContainerRef} className="h-full w-full z-10" />
+        <MapLayerControls
+          showLive={showLive}
+          onToggleLive={() => setShowLive((v) => !v)}
+          liveCount={liveCount}
+          violationsCount={violations.length}
+          showDangerZones={showDangerZones}
+          onToggleDangerZones={() => setShowDangerZones((v) => !v)}
+        />
       </div>
 
       {selectedH3Cell && (

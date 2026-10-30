@@ -44,6 +44,10 @@ function normalizeLensViolation(lensPost) {
     category_id: categoryId,
     violation_type_id: violationTypeId,
     severity_level: severityLevel,
+    court_name: attr(attributes, "courtName"),
+    court_decision_date: attr(attributes, "courtDecisionDate"),
+    court_case_number: attr(attributes, "courtCaseNumber"),
+    court_attested: attr(attributes, "courtAttested") === "true",
     created_at: lensPost.timestamp,
     author: {
       owner_address: lensPost.author?.owner || null,
@@ -51,6 +55,18 @@ function normalizeLensViolation(lensPost) {
     },
   };
 }
+
+// Dossier shows a violation anywhere only if it carries the court-decision
+// data and the author's attestation (REQUIRE_COURT_DECISION in dossier's
+// useLensViolations.js). The DAO map must apply the SAME rule, otherwise it
+// counts posts that dossier itself hides (e.g. drafts / old test posts).
+const hasCourtDecision = (v) =>
+  Boolean(
+    v.court_attested &&
+      v.court_name &&
+      v.court_decision_date &&
+      v.court_case_number,
+  );
 
 // Same as dossier's fetchViolations({}) called with no filters — every
 // published violation across the whole app, which is exactly the "all
@@ -78,7 +94,9 @@ export async function fetchAllViolations() {
     if (result.isErr()) throw new Error(result.error.message);
 
     const { items, pageInfo } = result.value;
-    violations.push(...items.map(normalizeLensViolation));
+    violations.push(
+      ...items.map(normalizeLensViolation).filter(hasCourtDecision),
+    );
     cursor = pageInfo?.next || undefined;
   } while (cursor);
 

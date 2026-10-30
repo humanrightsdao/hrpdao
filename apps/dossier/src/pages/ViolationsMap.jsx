@@ -18,7 +18,9 @@ import {
   Minimize2,
 } from "lucide-react";
 import Layout from "../components/Layout";
-import useLensViolations from "../hooks/useLensViolations";
+import useMapViolations from "../hooks/useMapViolations";
+import useMapOverlays from "../hooks/useMapOverlays";
+import MapLayerControls, { ToggleRow } from "../components/MapLayerControls";
 import useUserInfo from "../hooks/useUserInfo";
 import { countryViewConfigs, worldView } from "../utils/mapConfig";
 import { useCountry } from "../hooks/useCountry";
@@ -27,14 +29,6 @@ import {
   getSeverityInfo,
   VIOLATION_CATEGORIES,
 } from "../config/violationTypes";
-// ADDED: the violations map never checked sanctions/bans at all — no
-// marker was filtered.
-import {
-  fetchAllModActions,
-  computeModerationState,
-  computeBanState,
-  fetchShieldTotalSupply,
-} from "../utils/moderationActions";
 
 // Leaflet import for map
 import L from "leaflet";
@@ -59,6 +53,10 @@ L.Icon.Default.mergeOptions({
   shadowUrl:
     "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png",
 });
+
+// How often the map quietly re-fetches violations so the live alert pins
+// stay current (see useMapViolations).
+const LIVE_REFRESH_MS = 60_000;
 
 const ViolationsMap = () => {
   const { t } = useTranslation();
@@ -91,12 +89,16 @@ const ViolationsMap = () => {
   const { getTranslatedCountryName } = useCountry(
     localStorage.getItem("i18nextLng") || "uk",
   );
-  const { fetchViolations } = useLensViolations();
+  // Loading + moderation filtering live in a shared hook; it also quietly
+  // refreshes in the background so the live alert pins stay current.
+  const {
+    violations,
+    loading,
+    error,
+    reload: loadViolations,
+  } = useMapViolations({ refreshIntervalMs: LIVE_REFRESH_MS });
 
-  const [violations, setViolations] = useState([]);
   const [filteredViolations, setFilteredViolations] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
 
   // State for create post modal
   const [showCreatePostModal, setShowCreatePostModal] = useState(false);
@@ -124,6 +126,16 @@ const ViolationsMap = () => {
   const h3Resolution = LEVEL_RESOLUTIONS[hexLevel];
   const h3LayerRef = useRef(null);
 
+  // Danger zones (risk-coloured hexagons) and live alert pins
+  const [showDangerZones, setShowDangerZones] = useState(true);
+  // One "Live" switch controls both the violation alert pins and the
+  // external events (GDACS disasters, ACLED conflict events).
+  const [showLive, setShowLive] = useState(true);
+  // Fit the map to the markers only when the data/filters changed — NOT on
+  // every re-render or background refresh, which would yank the view away
+  // from wherever the user has panned/zoomed to.
+  const fitPendingRef = useRef(true);
+
   // Statistics
   const [stats, setStats] = useState({
     total: 0,
@@ -131,63 +143,8 @@ const ViolationsMap = () => {
     lastUpdated: null,
   });
 
-  // Load violations
-  const loadViolations = useCallback(async () => {
-    setLoading(true);
-    setError("");
-
-    try {
-      const result = await fetchViolations({});
-
-      if (!result.success) throw new Error(result.error);
-
-      // ADDED: posts hidden by a moderator, and posts from a banned
-      // author, should not appear on the map — previously no marker was
-      // checked against this at all.
-      const [modActions, shieldTotalSupply] = await Promise.all([
-        fetchAllModActions(),
-        fetchShieldTotalSupply(),
-      ]);
-
-      const validViolations = result.violations.filter((v) => {
-        if (!(v.latitude && v.longitude && !isNaN(v.latitude) && !isNaN(v.longitude))) {
-          return false;
-        }
-        if (computeModerationState(modActions, v.lens_post_id).hidden) {
-          return false;
-        }
-        if (v.author?.owner_address) {
-          const banState = computeBanState(
-            modActions,
-            v.author.owner_address,
-            shieldTotalSupply,
-          );
-          if (banState.banned) return false;
-        }
-        return true;
-      });
-
-      setViolations(validViolations);
-      setFilteredViolations(validViolations);
-
-      const countries = new Set(validViolations.map((v) => v.country_code))
-        .size;
-      setStats({
-        total: validViolations.length,
-        countries,
-        lastUpdated: new Date().toISOString(),
-      });
-    } catch (err) {
-      console.error("Error loading violations:", err);
-      setError(
-        err.message || t("load_violations_error") || "Error loading violations",
-      );
-    } finally {
-      setLoading(false);
-    }
-  }, [t, fetchViolations]);
-
   // Initialize map
+  const [mapVersion, setMapVersion] = useState(0);
   const initMap = useCallback(() => {
     if (!mapContainerRef.current || mapRef.current) return;
 
@@ -253,6 +210,9 @@ const ViolationsMap = () => {
     mapRef.current.on("drag", function () {
       mapRef.current.panInsideBounds(bounds, { animate: false });
     });
+    // Tell the overlay hook that a map now exists, so the Live events and
+    // danger zones are drawn right away (not only after a toggle).
+    setMapVersion((v) => v + 1);
   }, [countryFilter, userInfo]);
 
   // ADDED: pulled out separately so ONLY the date filter (without the
@@ -398,7 +358,8 @@ const ViolationsMap = () => {
       });
     });
 
-    if (filteredViolations.length > 0) {
+    if (filteredViolations.length > 0 && fitPendingRef.current) {
+      fitPendingRef.current = false;
       const bounds = L.latLngBounds(
         filteredViolations.map((v) => [
           parseFloat(v.latitude),
@@ -507,6 +468,18 @@ const ViolationsMap = () => {
     h3LayerRef.current = layerGroup;
   }, [mapRef, showH3Grid, h3Resolution, filteredViolations]);
 
+  // Conflict danger zones, live alert pins and live events — shared with the
+  // country map and the login-page map (hooks/useMapOverlays.js).
+  const { liveCount } = useMapOverlays({
+    mapRef,
+    mapVersion,
+    violations,
+    showLive,
+    showDangerZones,
+    onViewDetails: (id) => navigate(`/violations/${id}`),
+    getViolationTypeLabel,
+  });
+
   // Filter violations
   const applyFilters = useCallback(() => {
     let filtered = [...violations];
@@ -548,6 +521,7 @@ const ViolationsMap = () => {
     setCountryFilter("all");
     setDateFrom("");
     setDateTo("");
+    fitPendingRef.current = true;
     setFilteredViolations(violations);
 
     setStats({
@@ -566,9 +540,10 @@ const ViolationsMap = () => {
     renderH3GridRef.current = renderH3Grid;
   }, [renderH3Grid]);
 
+  // A changed country/date filter should re-fit the map to the markers.
   useEffect(() => {
-    loadViolations();
-  }, [loadViolations]);
+    fitPendingRef.current = true;
+  }, [countryFilter, dateFrom, dateTo]);
 
   useEffect(() => {
     if (!loading && !error && !mapRef.current) {
@@ -592,9 +567,9 @@ const ViolationsMap = () => {
   }, [filteredViolations, updateMapMarkers]);
 
   useEffect(() => {
-    if (violations.length > 0) {
-      applyFilters();
-    }
+    // Also runs for an empty list, so a background refresh that ends with
+    // no violations clears the counters and markers' source list.
+    applyFilters();
   }, [countryFilter, dateFrom, dateTo, violations, applyFilters]);
 
   useEffect(() => {
@@ -962,27 +937,20 @@ const ViolationsMap = () => {
                 )}
               </button>
 
-              {/* H3 Grid controls */}
-              <div className="absolute top-2 right-2 z-20 bg-white/90 dark:bg-[#000d1f]/90 border border-slate-200 dark:border-white/[0.1] rounded-lg px-3 py-1.5 flex flex-col items-stretch gap-1.5">
-                <label className="flex items-center gap-2 cursor-pointer justify-between">
-                  <span className="text-[14px] font-medium text-slate-400 dark:text-white/40 uppercase tracking-wider">
-                    H3 Grid
-                  </span>
-                  <div
-                    onClick={() => setShowH3Grid(!showH3Grid)}
-                    className={`relative w-8 h-5 rounded-full transition-colors ${
-                      showH3Grid
-                        ? "bg-blue-600 dark:bg-[#1a3f7a]"
-                        : "bg-slate-300 dark:bg-white/[0.08]"
-                    }`}
-                  >
-                    <span
-                      className={`absolute top-[2px] left-[2px] w-[16px] h-[16px] bg-white rounded-full shadow transition-transform ${
-                        showH3Grid ? "translate-x-[12px]" : "translate-x-0"
-                      }`}
-                    />
-                  </div>
-                </label>
+              {/* Layer controls */}
+              <MapLayerControls
+                showLive={showLive}
+                onToggleLive={() => setShowLive((v) => !v)}
+                liveCount={liveCount}
+                violationsCount={filteredViolations.length}
+                showDangerZones={showDangerZones}
+                onToggleDangerZones={() => setShowDangerZones((v) => !v)}
+              >
+                <ToggleRow
+                  label="H3 Grid"
+                  checked={showH3Grid}
+                  onChange={() => setShowH3Grid((v) => !v)}
+                />
 
                 {/* ADDED: switch for hexagon levels 3/2/1/0, like on the
                     country map. Visible only when the grid is enabled. */}
@@ -1005,7 +973,7 @@ const ViolationsMap = () => {
                     ))}
                   </div>
                 )}
-              </div>
+              </MapLayerControls>
             </div>
           </div>
         </div>

@@ -12,7 +12,7 @@
     "lint": "eslint .",
     "preview": "vite preview",
     "moderation:selftest": "node scripts/moderation-selftest.mjs",
-    "test:moderation": "node --test worker/moderation.test.js worker/index.test.js && node scripts/run-client-tests.mjs"
+    "test:moderation": "node --test worker/moderation.test.js worker/index.test.js worker/feeds.test.js && node scripts/run-client-tests.mjs"
   },
   "dependencies": {
     "@lens-chain/sdk": "^1.0.3",

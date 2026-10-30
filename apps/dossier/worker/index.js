@@ -1,8 +1,10 @@
 // worker/index.js
 // Cloudflare Worker version of server/index.js.
 // Serves /api/chat, /api/chat/stream and /api/moderate (AI content
-// moderation), plus /verify-captcha; everything else falls through to static assets.
+// moderation), /api/events (cached external event feeds), plus /verify-captcha;
+// everything else falls through to static assets.
 
+import { handleEvents } from "./feeds.js";
 import {
   parseModerationRequest,
   moderateItems,
@@ -695,6 +697,11 @@ export default {
       }
       // SSE stream response: headers only, body passes through untouched.
       return withSecurityHeaders(await handleChatStream(request, env, ctx));
+    }
+
+    // Cached proxy for external event feeds (see worker/feeds.js).
+    if (url.pathname === "/api/events" && request.method === "GET") {
+      return withSecurityHeaders(await handleEvents(request, ctx, { env }));
     }
 
     if (url.pathname === "/verify-captcha" && request.method === "POST") {

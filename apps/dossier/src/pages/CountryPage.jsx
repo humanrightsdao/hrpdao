@@ -17,6 +17,8 @@ import {
 } from "lucide-react";
 import Layout from "../components/Layout";
 import { useCountry } from "../hooks/useCountry";
+import useMapOverlays from "../hooks/useMapOverlays";
+import MapLayerControls, { ToggleRow } from "../components/MapLayerControls";
 import CountryFeed from "../components/CountryFeed";
 import useUserInfo from "../hooks/useUserInfo";
 import { useUserStats } from "../hooks/useUserStats";
@@ -240,6 +242,14 @@ export default function CountryPage() {
   };
 
   const [showH3Grid, setShowH3Grid] = useState(false);
+  // Shared overlays (see hooks/useMapOverlays.js): "Live" = alert pins +
+  // external events, plus the curated conflict danger zones.
+  const [showLive, setShowLive] = useState(true);
+  const [showDangerZones, setShowDangerZones] = useState(true);
+  // initMap() re-creates the Leaflet map (e.g. when the country changes), so
+  // this counter tells the overlays to draw themselves on the new instance.
+  const [mapVersion, setMapVersion] = useState(0);
+  const fitStateRef = useRef({ map: null, key: "" });
   const [selectedH3Cell, setSelectedH3Cell] = useState(null);
   const [userH3Cell, setUserH3Cell] = useState(null);
   // ADDED: the selected hexagon level (3 — the former default behavior,
@@ -344,6 +354,16 @@ export default function CountryPage() {
       resetRatings();
     }
   }, [selectedCountry]);
+
+  const { liveCount } = useMapOverlays({
+    mapRef,
+    mapVersion,
+    violations,
+    showLive,
+    showDangerZones,
+    onViewDetails: (id) => navigate(`/violations/${id}`),
+    getViolationTypeLabel,
+  });
 
   const loadViolations = useCallback(async () => {
     setMapLoading(true);
@@ -462,7 +482,10 @@ export default function CountryPage() {
           "leaflet-bar leaflet-control leaflet-control-custom",
         );
         container.style.backgroundColor = "white";
-        container.style.padding = "6px 10px";
+        container.style.padding = "0";
+        container.style.width = "36px";
+        container.style.height = "36px";
+        container.style.justifyContent = "center";
         container.style.borderRadius = "4px";
         container.style.boxShadow = "0 1px 5px rgba(0,0,0,0.4)";
         container.style.cursor = "pointer";
@@ -473,7 +496,12 @@ export default function CountryPage() {
         container.style.gap = "4px";
 
         const counterText = `${filteredViolations.length} ${t("violations_on_map") || "violations on map"}`;
-        container.innerHTML = `<span style="font-size:14px;">${counterText}</span><svg style="width:12px;height:12px;color:#3b82f6;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3"></path></svg>`;
+        // Icon-only: the count lives on the "Layers" button; the text is
+        // kept as tooltip / accessible name ("N violations on map").
+        container.title = counterText;
+        container.setAttribute("role", "link");
+        container.setAttribute("aria-label", counterText);
+        container.innerHTML = `<span style="display:none;">${counterText}</span><svg style="width:18px;height:18px;color:#3b82f6;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3"></path></svg>`;
         container.onclick = () => {
           navigate("/violations-map");
         };
@@ -549,6 +577,8 @@ export default function CountryPage() {
     if (showH3Grid) {
       setTimeout(() => renderH3GridRef.current(), 50);
     }
+    // The map instance was (re)created: let the shared overlays attach to it.
+    setMapVersion((v) => v + 1);
   }, [selectedCountry, lensProfile, filteredViolations.length, t, navigate]);
 
   const updateMapMarkers = useCallback(() => {
@@ -612,7 +642,16 @@ export default function CountryPage() {
       markersRef.current.push(marker);
     });
 
-    if (filteredViolations.length > 0) {
+    // Fit the view only when the map or the set of markers actually changed.
+    // A mere re-render (e.g. the Live counter changing while the user zooms)
+    // must NOT snap the map back to the full view.
+    const fitKey = `${selectedCountry}|${filteredViolations.map((v) => v.id).join(",")}`;
+    const needsFit =
+      fitStateRef.current.map !== mapRef.current ||
+      fitStateRef.current.key !== fitKey;
+    if (needsFit) fitStateRef.current = { map: mapRef.current, key: fitKey };
+
+    if (needsFit && filteredViolations.length > 0) {
       const bounds = L.latLngBounds(
         filteredViolations.map((v) => [
           parseFloat(v.latitude),
@@ -640,6 +679,8 @@ export default function CountryPage() {
     if (mapCounterRef.current) {
       const counterText = `${filteredViolations.length} ${t("violations_on_map") || "violations on map"}`;
       mapCounterRef.current.querySelector("span").textContent = counterText;
+      mapCounterRef.current.title = counterText;
+      mapCounterRef.current.setAttribute("aria-label", counterText);
     }
   }, [
     filteredViolations,
@@ -1216,21 +1257,21 @@ export default function CountryPage() {
                 className={`${cardBg} ${cardBorder} rounded-xl overflow-hidden mb-2`}
               >
                 <div className="relative">
-                  {/* H3 Grid toggle + hexagon level switcher */}
-                  <div className="absolute top-2 right-2 z-20 bg-white/90 dark:bg-[#000d1f]/90 border border-slate-300 dark:border-white/[0.1] rounded-lg px-3 py-1.5 flex flex-col items-stretch gap-1.5">
-                    <label className="flex items-center gap-2 cursor-pointer justify-between">
-                      <span className="text-[14px] font-medium text-slate-600 dark:text-white/40 uppercase tracking-wider">
-                        H3 Grid
-                      </span>
-                      <div
-                        onClick={() => setShowH3Grid(!showH3Grid)}
-                        className={`relative w-8 h-5 rounded-full transition-colors ${showH3Grid ? "bg-blue-600 dark:bg-[#1a3f7a]" : "bg-slate-300 dark:bg-white/[0.08]"}`}
-                      >
-                        <span
-                          className={`absolute top-[2px] left-[2px] w-[16px] h-[16px] bg-white rounded-full shadow transition-transform ${showH3Grid ? "translate-x-[12px]" : "translate-x-0"}`}
-                        />
-                      </div>
-                    </label>
+                  {/* Live / danger zones / H3 grid switches + level switcher */}
+                  <MapLayerControls
+                    showLive={showLive}
+                    onToggleLive={() => setShowLive((v) => !v)}
+                    liveCount={liveCount}
+                    violationsCount={filteredViolations.length}
+                    defaultOpen={false}
+                    showDangerZones={showDangerZones}
+                    onToggleDangerZones={() => setShowDangerZones((v) => !v)}
+                  >
+                    <ToggleRow
+                      label="H3 Grid"
+                      checked={showH3Grid}
+                      onChange={() => setShowH3Grid((v) => !v)}
+                    />
 
                     {/* ADDED: switch for hexagon levels 3/2/1/0. Visible only
                         when the grid is enabled. Level 3 — the previous
@@ -1254,7 +1295,7 @@ export default function CountryPage() {
                         ))}
                       </div>
                     )}
-                  </div>
+                  </MapLayerControls>
 
                   {mapError && (
                     <div className="absolute inset-0 z-50 flex items-center justify-center p-4">

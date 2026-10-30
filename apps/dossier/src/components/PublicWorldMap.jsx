@@ -14,7 +14,9 @@
 // this screen has nothing to navigate to yet.
 import React, { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import useLensViolations from "../hooks/useLensViolations";
+import useMapViolations from "../hooks/useMapViolations";
+import useMapOverlays from "../hooks/useMapOverlays";
+import MapLayerControls from "./MapLayerControls";
 import { useCountry } from "../hooks/useCountry";
 import { getSeverityInfo, VIOLATION_CATEGORIES } from "../config/violationTypes";
 
@@ -38,15 +40,20 @@ const PublicWorldMap = () => {
     return val && val !== key ? val : fallback;
   };
 
-  const { fetchViolations } = useLensViolations();
+  // Same loading + moderation rules as the full violations map (hidden posts
+  // and banned authors are dropped), refreshed quietly in the background so
+  // the live alert pins stay current.
+  const { violations, loading, error } = useMapViolations({
+    refreshIntervalMs: 60_000,
+  });
   const { getTranslatedCountryName } = useCountry(i18n.language || "uk");
 
   const mapContainerRef = useRef(null);
   const mapRef = useRef(null);
   const markersRef = useRef([]);
 
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
+  const [showLive, setShowLive] = useState(true);
+  const [showDangerZones, setShowDangerZones] = useState(true);
 
   const getViolationTypeLabel = (violation) => {
     const category = VIOLATION_CATEGORIES.find(
@@ -155,43 +162,6 @@ const PublicWorldMap = () => {
     };
   }, []);
 
-  // Load public violations once and drop pins for all of them —
-  // Earth-only, no country/date filters, no H3 grid.
-  const violationsRef = useRef([]);
-  useEffect(() => {
-    let cancelled = false;
-
-    (async () => {
-      setLoading(true);
-      setError("");
-      try {
-        const result = await fetchViolations({});
-        if (!result.success) throw new Error(result.error);
-        if (!cancelled) {
-          violationsRef.current = result.violations || [];
-          renderMarkers(violationsRef.current);
-        }
-      } catch (err) {
-        if (!cancelled) setError(err.message || "Failed to load");
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    })();
-
-    return () => {
-      cancelled = true;
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  // If someone switches language with the manual selector after the
-  // markers are already on the map, re-render the (already-fetched)
-  // popups so the country names in them follow the new language too.
-  useEffect(() => {
-    if (violationsRef.current.length) renderMarkers(violationsRef.current);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [i18n.language]);
-
   const renderMarkers = (violations) => {
     if (!mapRef.current) return;
 
@@ -245,6 +215,26 @@ const PublicWorldMap = () => {
     });
   };
 
+  // Drop a pin for every violation. Re-runs when the list is refreshed and
+  // when the language changes, so the country names in the popups follow it.
+  useEffect(() => {
+    renderMarkers(violations);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [violations, i18n.language]);
+
+  // Conflict danger zones, live alert pins and live events, shared with the
+  // violations map. No "View details" button here: this is a preview widget
+  // on the login screen, so the alert pins have no navigation.
+  const { liveCount } = useMapOverlays({
+    mapRef,
+    mapVersion: !loading && !error,
+    violations,
+    showLive,
+    showDangerZones,
+    onViewDetails: null,
+    getViolationTypeLabel,
+  });
+
   return (
     <div className="bg-white dark:bg-[#000d1f] border border-slate-300 dark:border-white/[0.07] rounded-xl overflow-hidden">
       <div className="px-4 pt-3.5 pb-2">
@@ -253,7 +243,17 @@ const PublicWorldMap = () => {
         </h3>
       </div>
       <div className="relative w-full h-[200px]">
-        <div ref={mapContainerRef} className="w-full h-full" />
+        {/* relative z-0: keeps Leaflet's panes (z-index 400+) inside the map's own
+            stacking context, so the layers button on top of it stays visible */}
+        <div ref={mapContainerRef} className="relative z-0 w-full h-full" />
+        <MapLayerControls
+          compact
+          showLive={showLive}
+          onToggleLive={() => setShowLive((v) => !v)}
+          liveCount={liveCount}
+          showDangerZones={showDangerZones}
+          onToggleDangerZones={() => setShowDangerZones((v) => !v)}
+        />
         {loading && (
           <div className="absolute inset-0 flex items-center justify-center bg-white/70 dark:bg-[#000d1f]/70">
             <div className="w-6 h-6 rounded-full border-2 border-blue-600/40 border-t-blue-400 animate-spin" />
